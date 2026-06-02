@@ -73,7 +73,7 @@ Return only a JSON object (no markdown fences) in this exact format:
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         system: "You are Wayflo, a friendly and knowledgeable travel planner for budget backpackers. You give honest, practical, specific advice. You always respond with valid JSON only — no prose outside the JSON object, no markdown code fences.",
         messages: [{ role: "user", content: userMessage }],
