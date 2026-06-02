@@ -217,6 +217,8 @@ export default function App() {
   const [refineFeedback, setRefineFeedback] = useState("");
   const [refining, setRefining]     = useState(false);
   const [error, setError]           = useState("");
+  const [saving, setSaving]         = useState(false);
+  const [saved, setSaved]           = useState(false);
   const requestInFlight             = useRef(false);
 
   // ── Free trip gate ─────────────────────────────────────────────────────────
@@ -264,6 +266,7 @@ export default function App() {
       setRawText(text); setItinerary(parsed);
       setPhotoQuery(parsed.photoQuery || destination);
       setTripCount(c => c + 1);
+      setSaved(false);
       setPhase("result");
     } catch(e) {
       setError(e.message||"Something went wrong."); setPhase("form");
@@ -284,6 +287,29 @@ export default function App() {
       setRefineFeedback("");
     } catch(e) { setError(e.message||"Refinement failed."); }
     finally { setRefining(false); requestInFlight.current = false; }
+  }
+
+  async function saveTrip() {
+    if (!user) { setShowAuth(true); return; }
+    if (saving || saved) return;
+    setSaving(true);
+    const { error } = await supabase.from("trips").insert({
+      user_id:      user.id,
+      destination,
+      date_from:    dateFrom || null,
+      date_to:      dateTo   || null,
+      budget,
+      travel_style: travelStyle,
+      origin,
+      interests,
+      itinerary:    itinerary,
+    });
+    if (error) {
+      setError("Couldn't save trip. Try again.");
+    } else {
+      setSaved(true);
+    }
+    setSaving(false);
   }
 
   const busy = phase === "loading";
@@ -443,10 +469,11 @@ export default function App() {
               {itinerary.days.map((day,i)=><DayCard key={i} day={day} index={i} />)}
             </div>
 
-            <button style={{ width:"100%", padding:"0.82rem", background:"var(--ink)", border:"none", borderRadius:"8px", color:"var(--paper)", fontSize:"0.92rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif", marginBottom:"0.85rem", transition:"opacity 0.2s" }}
-              onMouseOver={e=>e.currentTarget.style.opacity="0.85"}
-              onMouseOut={e=>e.currentTarget.style.opacity="1"}>
-              Save this trip
+            <button
+              onClick={saveTrip}
+              disabled={saving || saved}
+              style={{ width:"100%", padding:"0.82rem", background: saved ? "var(--green)" : saving ? "var(--warm-mid)" : "var(--ink)", border:"none", borderRadius:"8px", color:"var(--paper)", fontSize:"0.92rem", fontWeight:500, cursor: saved||saving ? "default" : "pointer", fontFamily:"'DM Sans', sans-serif", marginBottom:"0.85rem", transition:"background 0.3s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.5rem" }}>
+              {saved ? "✓ Trip saved" : saving ? <><Spinner />Saving…</> : "Save this trip"}
             </button>
 
             {/* Refine */}
