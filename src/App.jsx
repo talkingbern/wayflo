@@ -2,32 +2,27 @@ import { useState, useRef } from "react";
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const FONT_INJECT = `
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap');
-
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
     --ink:      #1a1510;
+    --ink-soft: #4a3f34;
     --paper:    #f5f0e8;
-    --sand:     #e8dfc8;
+    --sand:     #e0d5bf;
     --rust:     #c4622d;
     --rust-dk:  #9e4a1f;
-    --sage:     #6b7c5e;
-    --warm-mid: #a89880;
+    --warm-mid: #9a8870;
     --card-bg:  #faf7f2;
+    --white:    #ffffff;
   }
-
   html { font-size: 16px; }
-
   body {
     background: var(--paper);
     color: var(--ink);
     font-family: 'DM Sans', sans-serif;
-    font-weight: 400;
     min-height: 100vh;
     overflow-x: hidden;
   }
-
   body::before {
     content: '';
     position: fixed;
@@ -37,97 +32,90 @@ const FONT_INJECT = `
     z-index: 9999;
     opacity: 0.5;
   }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(18px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+  @keyframes spin     { to { transform: rotate(360deg); } }
   @keyframes pulse-ring {
-    0%   { box-shadow: 0 0 0 0 rgba(196,98,45,0.35); }
+    0%   { box-shadow: 0 0 0 0 rgba(196,98,45,0.4); }
     70%  { box-shadow: 0 0 0 10px rgba(196,98,45,0); }
     100% { box-shadow: 0 0 0 0 rgba(196,98,45,0); }
   }
 `;
 
-// ─── Sample data for Randomize ────────────────────────────────────────────────
+// ─── Data ─────────────────────────────────────────────────────────────────────
 const DESTINATIONS = [
-  "Southeast Asia (Thailand, Vietnam, Cambodia)",
-  "Balkan Peninsula (Serbia, Bosnia, Albania)",
-  "Morocco & Portugal",
-  "Peru & Bolivia",
-  "Japan on a budget",
-  "Eastern Europe (Poland, Czech Republic, Hungary)",
-  "Colombia & Ecuador",
-  "Indonesia (Bali, Lombok, Java)",
+  "Bangkok, Thailand", "Hanoi, Vietnam", "Bali, Indonesia",
+  "Medellín, Colombia", "Lisbon, Portugal", "Budapest, Hungary",
+  "Marrakech, Morocco", "Oaxaca, Mexico", "Tbilisi, Georgia",
+  "Chiang Mai, Thailand", "Split, Croatia", "Sarajevo, Bosnia",
 ];
-const STYLES = ["Solo adventure", "Group travel", "Slow travel", "Fast-paced explorer", "Off the beaten path"];
+const ORIGINS = [
+  "New York, USA", "London, UK", "Sydney, Australia",
+  "Toronto, Canada", "Berlin, Germany", "São Paulo, Brazil",
+  "Tokyo, Japan", "Cape Town, South Africa",
+];
+const STYLES = [
+  "Solo adventure", "Group travel", "Slow travel",
+  "Fast-paced explorer", "Off the beaten path", "Digital nomad",
+];
 const INTERESTS_OPTIONS = [
-  "Street food & local markets",
-  "Hiking & nature",
-  "History & culture",
-  "Nightlife & socialising",
-  "Art & architecture",
-  "Beaches & swimming",
-  "Photography",
-  "Volunteering",
+  "Street food & markets", "Hiking & nature", "History & culture",
+  "Nightlife", "Art & architecture", "Beaches", "Photography", "Volunteering",
 ];
-const BUDGETS = ["$20/day", "$35/day", "$50/day", "$75/day"];
+const BUDGETS = ["$300–500", "$500–800", "$800–1200", "$1200–2000", "$2000+"];
 
 function randomPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function randomDates() {
-  const start = new Date(Date.now() + 1000 * 60 * 60 * 24 * (Math.floor(Math.random() * 60) + 14));
-  const end   = new Date(start.getTime() + 1000 * 60 * 60 * 24 * (Math.floor(Math.random() * 18) + 5));
+  const start = new Date(Date.now() + 864e5 * (Math.floor(Math.random() * 60) + 14));
+  const end   = new Date(start.getTime() + 864e5 * (Math.floor(Math.random() * 18) + 5));
   return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-const Label = ({ children }) => (
-  <div style={{ fontSize: "0.65rem", fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--warm-mid)", marginBottom: "0.4rem" }}>
-    {children}
-  </div>
-);
-
-const inputStyle = {
+// ─── Shared input styles ──────────────────────────────────────────────────────
+const inputBase = {
   width: "100%",
-  padding: "0.75rem 1rem",
-  background: "var(--paper)",
+  padding: "0.7rem 1rem",
+  background: "var(--white)",
   border: "1.5px solid var(--sand)",
-  borderRadius: "6px",
-  fontSize: "0.95rem",
+  borderRadius: "8px",
+  fontSize: "0.92rem",
   color: "var(--ink)",
   fontFamily: "'DM Sans', sans-serif",
   outline: "none",
-  transition: "border-color 0.2s",
+  transition: "border-color 0.2s, box-shadow 0.2s",
 };
 
-function StyledInput({ style, ...props }) {
+function FocusInput({ as: Tag = "input", style, children, ...props }) {
   const [focused, setFocused] = useState(false);
   return (
-    <input
+    <Tag
       {...props}
-      style={{ ...inputStyle, ...(focused ? { borderColor: "var(--rust)" } : {}), ...style }}
+      style={{
+        ...inputBase,
+        ...(focused ? { borderColor: "var(--rust)", boxShadow: "0 0 0 3px rgba(196,98,45,0.1)" } : {}),
+        ...style,
+      }}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-    />
+    >
+      {children}
+    </Tag>
   );
 }
 
-function StyledSelect({ style, children, ...props }) {
+function SelectInput({ style, children, ...props }) {
   const [focused, setFocused] = useState(false);
   return (
     <select
       {...props}
       style={{
-        ...inputStyle,
+        ...inputBase,
         appearance: "none",
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a89880' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239a8870' d='M6 8L0 0h12z'/%3E%3C/svg%3E")`,
         backgroundRepeat: "no-repeat",
-        backgroundPosition: "calc(100% - 12px) center",
+        backgroundPosition: "calc(100% - 14px) center",
         cursor: "pointer",
-        ...(focused ? { borderColor: "var(--rust)" } : {}),
+        ...(focused ? { borderColor: "var(--rust)", boxShadow: "0 0 0 3px rgba(196,98,45,0.1)" } : {}),
         ...style,
       }}
       onFocus={() => setFocused(true)}
@@ -138,81 +126,187 @@ function StyledSelect({ style, children, ...props }) {
   );
 }
 
-function Chip({ label, selected, onClick }) {
+// ─── Field row with label + mini randomize ────────────────────────────────────
+function FieldRow({ number, label, onRandomize, children }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "0.4rem 0.85rem",
-        borderRadius: "999px",
-        border: "1.5px solid",
-        borderColor: selected ? "var(--rust)" : "var(--sand)",
-        background: selected ? "var(--rust)" : "transparent",
-        color: selected ? "#fff" : "var(--warm-mid)",
-        fontSize: "0.8rem",
-        fontFamily: "'DM Sans', sans-serif",
-        cursor: "pointer",
-        transition: "all 0.18s",
-        fontWeight: selected ? 500 : 400,
-      }}
-    >
-      {label}
-    </button>
+    <div style={{ marginBottom: "1.3rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+        <label style={{ fontSize: "0.63rem", fontWeight: 600, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--warm-mid)" }}>
+          {String(number).padStart(2, "0")} — {label}
+        </label>
+        {onRandomize && (
+          <button
+            type="button"
+            onClick={onRandomize}
+            title={`Randomize ${label}`}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              fontSize: "0.75rem", color: "var(--warm-mid)", padding: "0 0.2rem",
+              transition: "color 0.15s",
+            }}
+            onMouseOver={e => e.currentTarget.style.color = "var(--rust)"}
+            onMouseOut={e => e.currentTarget.style.color = "var(--warm-mid)"}
+          >
+            🎲
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
   );
 }
 
+// ─── Interest chip ────────────────────────────────────────────────────────────
+function Chip({ label, selected, onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      padding: "0.35rem 0.8rem",
+      borderRadius: "999px",
+      border: "1.5px solid",
+      borderColor: selected ? "var(--rust)" : "var(--sand)",
+      background: selected ? "var(--rust)" : "transparent",
+      color: selected ? "#fff" : "var(--warm-mid)",
+      fontSize: "0.78rem",
+      fontFamily: "'DM Sans', sans-serif",
+      cursor: "pointer",
+      transition: "all 0.15s",
+      fontWeight: selected ? 500 : 400,
+    }}>{label}</button>
+  );
+}
+
+// ─── Spinner ──────────────────────────────────────────────────────────────────
+function Spinner({ size = 14, color = "#fff" }) {
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: "50%",
+      border: `2px solid ${color}4`,
+      borderTopColor: color,
+      animation: "spin 0.7s linear infinite",
+      display: "inline-block", flexShrink: 0,
+    }} />
+  );
+}
+
+// ─── Day card ─────────────────────────────────────────────────────────────────
 function DayCard({ day, index }) {
+  const bullets = day.content
+    .split("\n")
+    .map(l => l.replace(/^[•\-\*]\s*/, "").trim())
+    .filter(Boolean);
+
   return (
     <div style={{
-      background: "var(--card-bg)",
+      background: "var(--white)",
       border: "1px solid var(--sand)",
       borderRadius: "10px",
-      padding: "1.25rem 1.5rem",
-      animation: "fadeUp 0.4s ease both",
-      animationDelay: `${index * 0.06}s`,
+      padding: "1.1rem 1.3rem",
+      animation: "fadeUp 0.35s ease both",
+      animationDelay: `${index * 0.05}s`,
     }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", marginBottom: "0.75rem" }}>
-        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.5rem", fontWeight: 900, color: "var(--rust)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem", marginBottom: "0.7rem" }}>
+        <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.3rem", fontWeight: 900, color: "var(--rust)", flexShrink: 0 }}>
           {String(index + 1).padStart(2, "0")}
         </span>
-        <span style={{ fontWeight: 500, fontSize: "1rem" }}>{day.title || `Day ${index + 1}`}</span>
+        <span style={{ fontWeight: 600, fontSize: "0.92rem", color: "var(--ink)" }}>
+          {day.title.replace(/^Day \d+ [—-] /, "")}
+        </span>
       </div>
-      <div style={{ whiteSpace: "pre-wrap", fontSize: "0.88rem", lineHeight: 1.7, color: "#3a3028" }}>
-        {day.content}
-      </div>
+      <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+        {bullets.map((b, i) => (
+          <li key={i} style={{ display: "flex", gap: "0.5rem", fontSize: "0.84rem", lineHeight: 1.5, color: "var(--ink-soft)" }}>
+            <span style={{ color: "var(--rust)", flexShrink: 0, marginTop: "0.05rem" }}>→</span>
+            <span>{b}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ─── Hero photo ───────────────────────────────────────────────────────────────
+function HeroPhoto({ query, destination }) {
+  const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
+  const url = `https://source.unsplash.com/featured/1200x500?${encodeURIComponent(query || destination)}`;
+
+  if (errored) return null;
+
+  return (
+    <div style={{
+      width: "100%", height: "220px", borderRadius: "12px", overflow: "hidden",
+      background: "var(--sand)", marginBottom: "1.5rem", position: "relative",
+    }}>
+      {!loaded && (
+        <div style={{
+          position: "absolute", inset: 0, display: "flex",
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <Spinner size={22} color="var(--warm-mid)" />
+        </div>
+      )}
+      <img
+        src={url}
+        alt={destination}
+        onLoad={() => setLoaded(true)}
+        onError={() => setErrored(true)}
+        style={{
+          width: "100%", height: "100%", objectFit: "cover",
+          opacity: loaded ? 1 : 0, transition: "opacity 0.4s",
+        }}
+      />
+      {loaded && (
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          background: "linear-gradient(to top, rgba(26,21,16,0.55), transparent)",
+          padding: "1.5rem 1.2rem 0.7rem",
+        }}>
+          <span style={{ fontSize: "0.65rem", color: "rgba(255,255,255,0.7)", letterSpacing: "0.08em" }}>
+            Photo via Unsplash
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [destination, setDestination] = useState("");
-  const [dateFrom, setDateFrom]       = useState("");
-  const [dateTo, setDateTo]           = useState("");
-  const [budget, setBudget]           = useState("");
-  const [travelStyle, setTravelStyle] = useState("");
-  const [interests, setInterests]     = useState([]);
+  const [destination, setDestination]   = useState("");
+  const [origin, setOrigin]             = useState("");
+  const [dateFrom, setDateFrom]         = useState("");
+  const [dateTo, setDateTo]             = useState("");
+  const [budget, setBudget]             = useState("");
+  const [travelStyle, setTravelStyle]   = useState("");
+  const [interests, setInterests]       = useState([]);
+  const [customInterest, setCustomInterest] = useState("");
 
-  const [phase, setPhase]       = useState("form");   // form | loading | result
+  const [phase, setPhase]         = useState("form");
   const [itinerary, setItinerary] = useState(null);
-  const [rawText, setRawText]   = useState("");
+  const [rawText, setRawText]     = useState("");
+  const [photoQuery, setPhotoQuery] = useState("");
 
   const [refineFeedback, setRefineFeedback] = useState("");
   const [refining, setRefining]             = useState(false);
+  const [error, setError]                   = useState("");
 
-  const [error, setError] = useState("");
-
-  // ── Ref-based guard: prevents any concurrent or double-fire requests ────────
   const requestInFlight = useRef(false);
 
+  // ── Interest helpers ──────────────────────────────────────────────────────
   function toggleInterest(item) {
     setInterests(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
   }
+  function addCustomInterest() {
+    const val = customInterest.trim();
+    if (val && !interests.includes(val)) setInterests(prev => [...prev, val]);
+    setCustomInterest("");
+  }
 
-  function randomize() {
+  // ── Randomizers ───────────────────────────────────────────────────────────
+  function randomizeAll() {
     const { from, to } = randomDates();
     setDestination(randomPick(DESTINATIONS));
+    setOrigin(randomPick(ORIGINS));
     setDateFrom(from);
     setDateTo(to);
     setBudget(randomPick(BUDGETS));
@@ -221,17 +315,18 @@ export default function App() {
     setInterests(shuffled.slice(0, Math.floor(Math.random() * 2) + 2));
   }
 
+  // ── Parse ─────────────────────────────────────────────────────────────────
   function parseItinerary(text) {
     try {
       const clean = text.replace(/```json|```/g, "").trim();
       return JSON.parse(clean);
     } catch {
-      return { intro: "", days: [{ title: "Your Itinerary", content: text }] };
+      return { intro: "", photoQuery: "", days: [{ title: "Your Itinerary", content: text }] };
     }
   }
 
-  // ── Shared fetch wrapper — always calls /api/generate ─────────────────────
-  async function callGenerateEndpoint(body) {
+  // ── API call ──────────────────────────────────────────────────────────────
+  async function callEndpoint(body) {
     const res = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -242,7 +337,7 @@ export default function App() {
       throw new Error(err.error || `Request failed (${res.status})`);
     }
     const data = await res.json();
-    return data.raw; // raw text from Anthropic
+    return data.raw;
   }
 
   // ── Generate ──────────────────────────────────────────────────────────────
@@ -251,19 +346,16 @@ export default function App() {
       setError("Please fill in all fields before generating.");
       return;
     }
-    // Hard guard — ref prevents race conditions even if state hasn't updated yet
     if (requestInFlight.current) return;
     requestInFlight.current = true;
-
     setError("");
     setPhase("loading");
-
     try {
-      const text = await callGenerateEndpoint({
-        destination, dateFrom, dateTo, budget, travelStyle, interests,
-      });
+      const text = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests });
+      const parsed = parseItinerary(text);
       setRawText(text);
-      setItinerary(parseItinerary(text));
+      setItinerary(parsed);
+      setPhotoQuery(parsed.photoQuery || destination);
       setPhase("result");
     } catch (e) {
       setError(e.message || "Something went wrong. Please try again.");
@@ -275,21 +367,16 @@ export default function App() {
 
   // ── Refine ────────────────────────────────────────────────────────────────
   async function refine() {
-    if (!refineFeedback.trim()) return;
-    if (requestInFlight.current) return;
+    if (!refineFeedback.trim() || requestInFlight.current) return;
     requestInFlight.current = true;
-
     setRefining(true);
     setError("");
-
     try {
-      const text = await callGenerateEndpoint({
-        destination, dateFrom, dateTo, budget, travelStyle, interests,
-        refineFeedback,
-        previousItinerary: rawText,
-      });
+      const text = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, refineFeedback, previousItinerary: rawText });
+      const parsed = parseItinerary(text);
       setRawText(text);
-      setItinerary(parseItinerary(text));
+      setItinerary(parsed);
+      setPhotoQuery(parsed.photoQuery || destination);
       setRefineFeedback("");
     } catch (e) {
       setError(e.message || "Refinement failed. Try again.");
@@ -299,375 +386,264 @@ export default function App() {
     }
   }
 
-  // ── Derived UI flags ───────────────────────────────────────────────────────
-  const isLoading      = phase === "loading";
-  const generateBusy   = isLoading; // button disabled state
-  const refineBusy     = refining || !refineFeedback.trim();
+  const busy = phase === "loading";
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <>
       <style>{FONT_INJECT}</style>
 
       {/* Header */}
-      <header style={{
-        padding: "1.5rem 1.5rem 0",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        maxWidth: "680px",
-        margin: "0 auto",
-      }}>
+      <header style={{ maxWidth: 680, margin: "0 auto", padding: "1.4rem 1.25rem 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
-          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.6rem", fontWeight: 900, color: "var(--rust)" }}>
-            Wayflo
-          </span>
-          <span style={{ fontSize: "0.7rem", letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--warm-mid)" }}>
-            Budget travel planner
-          </span>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.55rem", fontWeight: 900, color: "var(--rust)" }}>Wayflo</span>
+          <span style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--warm-mid)" }}>Budget travel planner</span>
         </div>
         {phase === "result" && (
-          <button
-            onClick={() => { setPhase("form"); setItinerary(null); setError(""); }}
-            style={{
-              background: "none",
-              border: "1.5px solid var(--sand)",
-              borderRadius: "6px",
-              padding: "0.4rem 0.9rem",
-              fontSize: "0.78rem",
-              cursor: "pointer",
-              color: "var(--warm-mid)",
-              fontFamily: "'DM Sans', sans-serif",
-              letterSpacing: "0.05em",
-            }}
-          >
+          <button onClick={() => { setPhase("form"); setItinerary(null); setError(""); }}
+            style={{ background: "none", border: "1.5px solid var(--sand)", borderRadius: "6px", padding: "0.35rem 0.85rem", fontSize: "0.76rem", cursor: "pointer", color: "var(--warm-mid)", fontFamily: "'DM Sans', sans-serif" }}>
             ← New trip
           </button>
         )}
       </header>
 
-      <main style={{ maxWidth: "680px", margin: "0 auto", padding: "1.5rem" }}>
+      <main style={{ maxWidth: 680, margin: "0 auto", padding: "1.25rem" }}>
 
-        {/* ── FORM ─────────────────────────────────────────────────────────── */}
+        {/* ── FORM ───────────────────────────────────────────────────────── */}
         {phase === "form" && (
           <div style={{ animation: "fadeUp 0.4s ease both" }}>
-            <div style={{ marginBottom: "2rem" }}>
-              <h1 style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: "clamp(2rem, 7vw, 3rem)",
-                fontWeight: 900,
-                lineHeight: 1.1,
-                color: "var(--ink)",
-                marginBottom: "0.6rem",
-              }}>
-                Where are you<br />
-                <span style={{ color: "var(--rust)" }}>running off to?</span>
+            <div style={{ marginBottom: "1.75rem" }}>
+              <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(1.9rem,7vw,2.9rem)", fontWeight: 900, lineHeight: 1.1, marginBottom: "0.5rem" }}>
+                Where are you<br /><span style={{ color: "var(--rust)" }}>running off to?</span>
               </h1>
-              <p style={{ fontSize: "0.9rem", color: "var(--warm-mid)", lineHeight: 1.6 }}>
-                Answer five quick questions and we'll build your perfect backpacker itinerary.
+              <p style={{ fontSize: "0.87rem", color: "var(--warm-mid)", lineHeight: 1.6 }}>
+                Five questions. One perfect backpacker itinerary.
               </p>
             </div>
 
-            <div style={{ height: "1px", background: "var(--sand)", marginBottom: "1.75rem" }} />
+            <div style={{ height: 1, background: "var(--sand)", marginBottom: "1.6rem" }} />
 
-            <div style={{ marginBottom: "1.4rem" }}>
-              <Label>01 — Destination</Label>
-              <StyledInput
-                type="text"
-                placeholder="e.g. Vietnam & Cambodia, 3 weeks"
-                value={destination}
-                onChange={e => setDestination(e.target.value)}
-              />
-            </div>
+            {/* 01 Destination */}
+            <FieldRow number={1} label="Destination" onRandomize={() => setDestination(randomPick(DESTINATIONS))}>
+              <FocusInput type="text" placeholder="e.g. Hanoi, Vietnam or Southeast Asia" value={destination} onChange={e => setDestination(e.target.value)} />
+            </FieldRow>
 
-            <div style={{ marginBottom: "1.4rem" }}>
-              <Label>02 — Travel Dates</Label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            {/* 02 Travelling from */}
+            <FieldRow number={2} label="Travelling from" onRandomize={() => setOrigin(randomPick(ORIGINS))}>
+              <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e => setOrigin(e.target.value)} />
+            </FieldRow>
+
+            {/* 03 Dates */}
+            <FieldRow number={3} label="Travel Dates" onRandomize={() => { const d = randomDates(); setDateFrom(d.from); setDateTo(d.to); }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.65rem" }}>
                 <div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--warm-mid)", marginBottom: "0.3rem" }}>From</div>
-                  <StyledInput type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                  <div style={{ fontSize: "0.7rem", color: "var(--warm-mid)", marginBottom: "0.25rem" }}>From</div>
+                  <FocusInput type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
                 </div>
                 <div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--warm-mid)", marginBottom: "0.3rem" }}>To</div>
-                  <StyledInput type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                  <div style={{ fontSize: "0.7rem", color: "var(--warm-mid)", marginBottom: "0.25rem" }}>To</div>
+                  <FocusInput type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
                 </div>
               </div>
-            </div>
+            </FieldRow>
 
-            <div style={{ marginBottom: "1.4rem" }}>
-              <Label>03 — Daily Budget</Label>
-              <StyledSelect value={budget} onChange={e => setBudget(e.target.value)}>
-                <option value="">Select your daily budget</option>
+            {/* 04 Budget */}
+            <FieldRow number={4} label="Total Trip Budget" onRandomize={() => setBudget(randomPick(BUDGETS))}>
+              <SelectInput value={budget} onChange={e => setBudget(e.target.value)}>
+                <option value="">Select your total budget (flights + accommodation + food)</option>
                 {BUDGETS.map(b => <option key={b}>{b}</option>)}
-              </StyledSelect>
-            </div>
+              </SelectInput>
+            </FieldRow>
 
-            <div style={{ marginBottom: "1.4rem" }}>
-              <Label>04 — Travel Style</Label>
-              <StyledSelect value={travelStyle} onChange={e => setTravelStyle(e.target.value)}>
+            {/* 05 Travel Style */}
+            <FieldRow number={5} label="Travel Style" onRandomize={() => setTravelStyle(randomPick(STYLES))}>
+              <SelectInput value={travelStyle} onChange={e => setTravelStyle(e.target.value)}>
                 <option value="">How do you like to travel?</option>
                 {STYLES.map(s => <option key={s}>{s}</option>)}
-              </StyledSelect>
-            </div>
+              </SelectInput>
+            </FieldRow>
 
-            <div style={{ marginBottom: "2rem" }}>
-              <Label>05 — Interests</Label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            {/* 06 Interests */}
+            <FieldRow number={6} label="Interests" onRandomize={() => {
+              const shuffled = [...INTERESTS_OPTIONS].sort(() => Math.random() - 0.5);
+              setInterests(shuffled.slice(0, Math.floor(Math.random() * 2) + 2));
+            }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.65rem" }}>
                 {INTERESTS_OPTIONS.map(item => (
-                  <Chip
-                    key={item}
-                    label={item}
-                    selected={interests.includes(item)}
-                    onClick={() => toggleInterest(item)}
-                  />
+                  <Chip key={item} label={item} selected={interests.includes(item)} onClick={() => toggleInterest(item)} />
+                ))}
+                {/* Custom interests added by user */}
+                {interests.filter(i => !INTERESTS_OPTIONS.includes(i)).map(i => (
+                  <Chip key={i} label={i} selected={true} onClick={() => toggleInterest(i)} />
                 ))}
               </div>
-            </div>
+              {/* Free-text input */}
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <FocusInput
+                  type="text"
+                  placeholder="Add your own interest…"
+                  value={customInterest}
+                  onChange={e => setCustomInterest(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && addCustomInterest()}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={addCustomInterest}
+                  disabled={!customInterest.trim()}
+                  style={{
+                    padding: "0 1rem",
+                    background: customInterest.trim() ? "var(--rust)" : "var(--sand)",
+                    border: "none", borderRadius: "8px",
+                    color: customInterest.trim() ? "#fff" : "var(--warm-mid)",
+                    fontSize: "0.85rem", cursor: customInterest.trim() ? "pointer" : "not-allowed",
+                    fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap",
+                    transition: "background 0.15s",
+                  }}
+                >+ Add</button>
+              </div>
+            </FieldRow>
 
+            {/* Error */}
             {error && (
-              <div style={{
-                background: "#fff1ed",
-                border: "1px solid #f5c6b0",
-                borderRadius: "6px",
-                padding: "0.65rem 1rem",
-                fontSize: "0.83rem",
-                color: "var(--rust-dk)",
-                marginBottom: "1rem",
-              }}>{error}</div>
+              <div style={{ background: "#fff1ed", border: "1px solid #f5c6b0", borderRadius: "8px", padding: "0.6rem 1rem", fontSize: "0.82rem", color: "var(--rust-dk)", marginBottom: "1rem" }}>
+                {error}
+              </div>
             )}
 
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            {/* Buttons */}
+            <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
               <button
-                onClick={randomize}
-                disabled={generateBusy}
+                onClick={randomizeAll}
+                disabled={busy}
                 style={{
-                  flex: "0 0 auto",
-                  padding: "0.75rem 1.25rem",
-                  background: "transparent",
-                  border: "1.5px solid var(--sand)",
-                  borderRadius: "8px",
-                  fontSize: "0.88rem",
-                  cursor: generateBusy ? "not-allowed" : "pointer",
-                  color: "var(--warm-mid)",
-                  fontFamily: "'DM Sans', sans-serif",
-                  opacity: generateBusy ? 0.5 : 1,
+                  padding: "0.72rem 1.2rem", background: "transparent",
+                  border: "1.5px solid var(--sand)", borderRadius: "8px",
+                  fontSize: "0.86rem", cursor: busy ? "not-allowed" : "pointer",
+                  color: "var(--warm-mid)", fontFamily: "'DM Sans', sans-serif",
+                  opacity: busy ? 0.5 : 1, transition: "border-color 0.15s, color 0.15s",
                 }}
+                onMouseOver={e => { if (!busy) { e.currentTarget.style.borderColor = "var(--rust)"; e.currentTarget.style.color = "var(--rust)"; }}}
+                onMouseOut={e => { e.currentTarget.style.borderColor = "var(--sand)"; e.currentTarget.style.color = "var(--warm-mid)"; }}
               >
-                🎲 Randomize
+                🎲 Randomize all
               </button>
-
-              {/* ── Generate button — disabled while in-flight ─────────────── */}
               <button
                 onClick={generate}
-                disabled={generateBusy}
-                aria-busy={generateBusy}
+                disabled={busy}
                 style={{
-                  flex: "1 1 180px",
-                  padding: "0.75rem 1.5rem",
-                  background: generateBusy ? "var(--warm-mid)" : "var(--rust)",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontSize: "0.95rem",
-                  fontWeight: 500,
-                  cursor: generateBusy ? "not-allowed" : "pointer",
-                  color: "#fff",
-                  fontFamily: "'DM Sans', sans-serif",
-                  letterSpacing: "0.03em",
-                  animation: generateBusy ? "none" : "pulse-ring 2.5s infinite",
+                  flex: "1 1 180px", padding: "0.72rem 1.5rem",
+                  background: busy ? "var(--warm-mid)" : "var(--rust)",
+                  border: "none", borderRadius: "8px",
+                  fontSize: "0.93rem", fontWeight: 500,
+                  cursor: busy ? "not-allowed" : "pointer",
+                  color: "#fff", fontFamily: "'DM Sans', sans-serif",
+                  animation: busy ? "none" : "pulse-ring 2.5s infinite",
                   transition: "background 0.2s",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
                 }}
               >
-                {generateBusy ? (
-                  <>
-                    <span style={{
-                      width: "14px", height: "14px",
-                      borderRadius: "50%",
-                      border: "2px solid rgba(255,255,255,0.4)",
-                      borderTopColor: "#fff",
-                      animation: "spin 0.7s linear infinite",
-                      display: "inline-block",
-                      flexShrink: 0,
-                    }} />
-                    Generating…
-                  </>
-                ) : "Generate my itinerary →"}
+                {busy ? <><Spinner />Generating…</> : "Generate my itinerary →"}
               </button>
             </div>
           </div>
         )}
 
-        {/* ── LOADING ──────────────────────────────────────────────────────── */}
+        {/* ── LOADING ─────────────────────────────────────────────────────── */}
         {phase === "loading" && (
-          <div style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: "60vh",
-            gap: "1.25rem",
-            animation: "fadeUp 0.3s ease both",
-          }}>
-            <div style={{
-              width: "42px", height: "42px",
-              borderRadius: "50%",
-              border: "3px solid var(--sand)",
-              borderTopColor: "var(--rust)",
-              animation: "spin 0.8s linear infinite",
-            }} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "65vh", gap: "1.2rem", animation: "fadeIn 0.3s ease both" }}>
+            <div style={{ width: 44, height: 44, borderRadius: "50%", border: "3px solid var(--sand)", borderTopColor: "var(--rust)", animation: "spin 0.8s linear infinite" }} />
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.4rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                Plotting your adventure…
-              </div>
-              <div style={{ fontSize: "0.83rem", color: "var(--warm-mid)" }}>
-                Finding hidden gems, cheap eats, and the best routes.
-              </div>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: "1.35rem", fontWeight: 700, marginBottom: "0.3rem" }}>Plotting your adventure…</div>
+              <div style={{ fontSize: "0.82rem", color: "var(--warm-mid)" }}>Finding hidden gems, local spots, and the best routes.</div>
             </div>
           </div>
         )}
 
-        {/* ── RESULT ───────────────────────────────────────────────────────── */}
+        {/* ── RESULT ──────────────────────────────────────────────────────── */}
         {phase === "result" && itinerary && (
           <div style={{ animation: "fadeUp 0.4s ease both" }}>
-            <div style={{ marginBottom: "1.75rem" }}>
-              <div style={{ fontSize: "0.65rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--warm-mid)", marginBottom: "0.4rem" }}>
-                Your itinerary
-              </div>
-              <h2 style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: "clamp(1.5rem, 5vw, 2.2rem)",
-                fontWeight: 900,
-                lineHeight: 1.15,
-                marginBottom: "0.75rem",
-              }}>
+
+            {/* Hero photo */}
+            <HeroPhoto query={photoQuery} destination={destination} />
+
+            {/* Trip header */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--warm-mid)", marginBottom: "0.35rem" }}>Your itinerary</div>
+              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: "clamp(1.4rem,5vw,2rem)", fontWeight: 900, color: "var(--ink)", lineHeight: 1.15, marginBottom: "0.65rem" }}>
                 {destination}
               </h2>
               {itinerary.intro && (
-                <p style={{ fontSize: "0.9rem", lineHeight: 1.7, color: "#4a3f34" }}>
-                  {itinerary.intro}
-                </p>
+                <p style={{ fontSize: "0.88rem", lineHeight: 1.7, color: "var(--ink-soft)" }}>{itinerary.intro}</p>
               )}
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.9rem" }}>
-                {[dateFrom && `${dateFrom} → ${dateTo}`, budget, travelStyle].filter(Boolean).map(tag => (
-                  <span key={tag} style={{
-                    padding: "0.25rem 0.7rem",
-                    background: "var(--sand)",
-                    borderRadius: "999px",
-                    fontSize: "0.75rem",
-                    color: "var(--ink)",
-                    fontWeight: 500,
-                  }}>{tag}</span>
+              <div style={{ display: "flex", gap: "0.45rem", flexWrap: "wrap", marginTop: "0.8rem" }}>
+                {[origin && `From ${origin}`, dateFrom && `${dateFrom} → ${dateTo}`, budget, travelStyle].filter(Boolean).map(tag => (
+                  <span key={tag} style={{ padding: "0.22rem 0.65rem", background: "var(--sand)", borderRadius: "999px", fontSize: "0.72rem", color: "var(--ink)", fontWeight: 500 }}>{tag}</span>
                 ))}
               </div>
             </div>
 
-            <div style={{ height: "1px", background: "var(--sand)", marginBottom: "1.5rem" }} />
+            <div style={{ height: 1, background: "var(--sand)", marginBottom: "1.25rem" }} />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem" }}>
-              {itinerary.days.map((day, i) => (
-                <DayCard key={i} day={day} index={i} />
-              ))}
+            {/* Day cards */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", marginBottom: "1.75rem" }}>
+              {itinerary.days.map((day, i) => <DayCard key={i} day={day} index={i} />)}
             </div>
 
-            <button
-              style={{
-                width: "100%",
-                padding: "0.85rem",
-                background: "var(--ink)",
-                border: "none",
-                borderRadius: "8px",
-                color: "#f5f0e8",
-                fontSize: "0.95rem",
-                fontWeight: 500,
-                cursor: "pointer",
-                fontFamily: "'DM Sans', sans-serif",
-                marginBottom: "1rem",
-                transition: "opacity 0.2s",
-              }}
+            {/* Save */}
+            <button style={{
+              width: "100%", padding: "0.82rem",
+              background: "var(--ink)", border: "none", borderRadius: "8px",
+              color: "var(--paper)", fontSize: "0.92rem", fontWeight: 500,
+              cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+              marginBottom: "0.85rem", transition: "opacity 0.2s",
+            }}
               onMouseOver={e => e.currentTarget.style.opacity = "0.85"}
               onMouseOut={e => e.currentTarget.style.opacity = "1"}
             >
               Save this trip
             </button>
 
-            {/* ── Refine ─────────────────────────────────────────────────── */}
-            <div style={{
-              background: "var(--card-bg)",
-              border: "1px solid var(--sand)",
-              borderRadius: "10px",
-              padding: "1.25rem",
-            }}>
-              <div style={{ fontSize: "0.65rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--warm-mid)", marginBottom: "0.6rem" }}>
-                Refine your itinerary
-              </div>
-              <p style={{ fontSize: "0.82rem", color: "#7a6a5a", marginBottom: "0.9rem", lineHeight: 1.6 }}>
-                Not quite right? Tell us what to change and we'll regenerate.
+            {/* Refine */}
+            <div style={{ background: "var(--card-bg)", border: "1px solid var(--sand)", borderRadius: "10px", padding: "1.15rem" }}>
+              <div style={{ fontSize: "0.62rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--warm-mid)", marginBottom: "0.45rem" }}>Refine</div>
+              <p style={{ fontSize: "0.8rem", color: "var(--warm-mid)", marginBottom: "0.8rem", lineHeight: 1.5 }}>
+                Not quite right? Tell us what to tweak.
               </p>
-              <textarea
-                placeholder="e.g. Add more beach days, remove the museum on day 3, I prefer street food over restaurants…"
+              <FocusInput
+                as="textarea"
+                placeholder="e.g. More beach time, skip museums, I hate early mornings…"
                 value={refineFeedback}
                 onChange={e => setRefineFeedback(e.target.value)}
                 disabled={refining}
                 rows={3}
-                style={{
-                  ...inputStyle,
-                  resize: "vertical",
-                  marginBottom: "0.75rem",
-                  lineHeight: 1.6,
-                  fontSize: "0.88rem",
-                  opacity: refining ? 0.6 : 1,
-                }}
+                style={{ resize: "vertical", marginBottom: "0.65rem", lineHeight: 1.6, fontSize: "0.86rem", opacity: refining ? 0.6 : 1 }}
               />
-              {error && (
-                <div style={{ fontSize: "0.8rem", color: "var(--rust-dk)", marginBottom: "0.6rem" }}>{error}</div>
-              )}
+              {error && <div style={{ fontSize: "0.78rem", color: "var(--rust-dk)", marginBottom: "0.5rem" }}>{error}</div>}
               <button
                 onClick={refine}
-                disabled={refineBusy}
-                aria-busy={refining}
+                disabled={refining || !refineFeedback.trim()}
                 style={{
-                  width: "100%",
-                  padding: "0.75rem",
-                  background: refineBusy ? "var(--sand)" : "var(--rust)",
-                  border: "none",
-                  borderRadius: "7px",
-                  color: refineBusy ? "var(--warm-mid)" : "#fff",
-                  fontSize: "0.9rem",
-                  fontWeight: 500,
-                  cursor: refineBusy ? "not-allowed" : "pointer",
+                  width: "100%", padding: "0.72rem",
+                  background: (refining || !refineFeedback.trim()) ? "var(--sand)" : "var(--rust)",
+                  border: "none", borderRadius: "7px",
+                  color: (refining || !refineFeedback.trim()) ? "var(--warm-mid)" : "#fff",
+                  fontSize: "0.88rem", fontWeight: 500,
+                  cursor: (refining || !refineFeedback.trim()) ? "not-allowed" : "pointer",
                   fontFamily: "'DM Sans', sans-serif",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
                   transition: "background 0.2s",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
                 }}
               >
-                {refining ? (
-                  <>
-                    <span style={{
-                      width: "14px", height: "14px",
-                      borderRadius: "50%",
-                      border: "2px solid rgba(255,255,255,0.4)",
-                      borderTopColor: "#fff",
-                      animation: "spin 0.7s linear infinite",
-                      display: "inline-block",
-                      flexShrink: 0,
-                    }} />
-                    Regenerating…
-                  </>
-                ) : "↻ Regenerate itinerary"}
+                {refining ? <><Spinner />Regenerating…</> : "↻ Regenerate itinerary"}
               </button>
             </div>
           </div>
         )}
       </main>
 
-      <footer style={{ textAlign: "center", padding: "2rem 1rem", color: "var(--warm-mid)", fontSize: "0.72rem", letterSpacing: "0.05em" }}>
-        WAYFLO — First trip free · $5/trip after that
+      <footer style={{ textAlign: "center", padding: "2rem 1rem 1.5rem", color: "var(--warm-mid)", fontSize: "0.68rem", letterSpacing: "0.06em" }}>
+        WAYFLO · First trip free · $5/trip after that
       </footer>
     </>
   );
