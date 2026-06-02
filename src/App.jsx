@@ -299,11 +299,13 @@ export default function App() {
 
       {/* Header */}
       <header style={{ maxWidth:680, margin:"0 auto", padding:"1.4rem 1.25rem 0", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-        <div style={{ display:"flex", alignItems:"baseline", gap:"0.5rem" }}>
-          <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.55rem", fontWeight:900, color:"var(--rust)" }}>Wayflo</span>
-          <span style={{ fontSize:"0.65rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)" }}>Budget travel planner</span>
+        {/* Logo + tagline stacked */}
+        <div style={{ display:"flex", flexDirection:"column", gap:"0.1rem" }}>
+          <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.55rem", fontWeight:900, color:"var(--rust)", lineHeight:1 }}>Wayflo</span>
+          <span style={{ fontSize:"0.62rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)" }}>Budget travel planner</span>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:"0.75rem" }}>
+        {/* Right side controls */}
+        <div style={{ display:"flex", alignItems:"center", gap:"0.65rem" }}>
           {phase === "result" && (
             <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); }}
               style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
@@ -312,15 +314,15 @@ export default function App() {
           )}
           {user ? (
             <div style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
-              <span style={{ fontSize:"0.75rem", color:"var(--warm-mid)", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</span>
+              <span style={{ fontSize:"0.73rem", color:"var(--warm-mid)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</span>
               <button onClick={signOut}
-                style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
+                style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
                 Sign out
               </button>
             </div>
           ) : (
             <button onClick={()=>setShowAuth(true)}
-              style={{ background:"var(--rust)", border:"none", borderRadius:"6px", padding:"0.38rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", fontWeight:500 }}>
+              style={{ background:"var(--rust)", border:"none", borderRadius:"6px", padding:"0.38rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", fontWeight:500, whiteSpace:"nowrap" }}>
               Sign in
             </button>
           )}
@@ -340,8 +342,8 @@ export default function App() {
         {phase === "form" && (
           <div style={{ animation:"fadeUp 0.4s ease both" }}>
             <div style={{ marginBottom:"1.75rem" }}>
-              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.9rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.5rem" }}>
-                Where are you<br /><span style={{ color:"var(--rust)" }}>running off to?</span>
+              <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.9rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.5rem", color:"var(--ink)" }}>
+                <span style={{ color:"var(--ink)" }}>Where are you</span><br /><span style={{ color:"var(--rust)" }}>running off to?</span>
               </h1>
               <p style={{ fontSize:"0.87rem", color:"var(--warm-mid)", lineHeight:1.6 }}>Five questions. One perfect backpacker itinerary.</p>
             </div>
