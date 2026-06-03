@@ -155,20 +155,22 @@ function HeroPhoto({ query, destination }) {
 }
 
 // ─── Paywall banner ───────────────────────────────────────────────────────────
-function PaywallBanner({ onSignIn }) {
+function PaywallBanner({ onSignIn, onPay, user }) {
   return (
     <div style={{ background:"var(--white)", border:"2px solid var(--rust)", borderRadius:"12px", padding:"1.5rem", textAlign:"center", marginBottom:"1.5rem", animation:"fadeUp 0.3s ease both" }}>
       <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, marginBottom:"0.4rem" }}>Your free trip is used up</div>
       <p style={{ fontSize:"0.85rem", color:"var(--warm-mid)", lineHeight:1.6, marginBottom:"1rem" }}>
         Each new itinerary is $5 — one flat fee, no subscription.
       </p>
-      <button onClick={onSignIn} style={{
-        padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none",
-        borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500,
-        cursor:"pointer", fontFamily:"'DM Sans', sans-serif",
-      }}>
-        Sign in to continue →
-      </button>
+      {!user ? (
+        <button onClick={onSignIn} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>
+          Sign in to continue →
+        </button>
+      ) : (
+        <button onClick={onPay} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>
+          Pay $5 and generate →
+        </button>
+      )}
     </div>
   );
 }
@@ -222,11 +224,46 @@ export default function App() {
   const requestInFlight             = useRef(false);
 
   // ── Free trip gate ─────────────────────────────────────────────────────────
-  // Guests get 1 free trip. After that they must sign in (and eventually pay).
-  const isFreeTrip  = !user && tripCount === 0;
-  const isBlocked   = !user && tripCount >= 1;
+  // Payment state
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [paidTrips, setPaidTrips]         = useState(0);
 
-  function toggleInterest(item) {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    if (payment === "success") {
+      setPaymentStatus("success");
+      setPaidTrips(n => n + 1);
+      window.history.replaceState({}, "", "/");
+    } else if (payment === "cancelled") {
+      setPaymentStatus("cancelled");
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
+
+  // Free trip gate
+  const hasFreeTripAvailable = tripCount === 0;
+  const hasPaidTripAvailable = user && paidTrips > 0;
+  const canGenerate          = hasFreeTripAvailable || hasPaidTripAvailable;
+  const isBlocked            = !canGenerate;
+
+  async function startCheckout() {
+    if (!user) { setShowAuth(true); return; }
+    setError("");
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      });
+      if (!res.ok) throw new Error("Could not start checkout");
+      const { url } = await res.json();
+      window.location.href = url;
+    } catch(e) {
+      setError(e.message || "Payment failed. Try again.");
+    }
+  }
+
     setInterests(prev => prev.includes(item) ? prev.filter(i=>i!==item) : [...prev,item]);
   }
   function addCustomInterest() {
@@ -256,7 +293,7 @@ export default function App() {
 
   async function generate() {
     if (!destination||!dateFrom||!dateTo||!budget||!travelStyle) { setError("Please fill in all fields."); return; }
-    if (isBlocked) { setShowAuth(true); return; }
+    if (isBlocked) { if (!user) setShowAuth(true); else startCheckout(); return; }
     if (requestInFlight.current) return;
     requestInFlight.current = true;
     setError(""); setPhase("loading");
@@ -275,8 +312,7 @@ export default function App() {
 
   async function refine() {
     if (!refineFeedback.trim()||requestInFlight.current) return;
-    // Refine counts as a new generation for billing purposes
-    if (isBlocked) { setShowAuth(true); return; }
+    if (isBlocked) { if (!user) setShowAuth(true); else startCheckout(); return; }
     requestInFlight.current = true;
     setRefining(true); setError("");
     try {
@@ -363,6 +399,16 @@ export default function App() {
             ✦ First itinerary is free — no account needed
           </div>
         )}
+        {paymentStatus === "success" && phase === "form" && (
+          <div style={{ background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"8px", padding:"0.6rem 1rem", fontSize:"0.82rem", color:"var(--green)", marginBottom:"1rem", fontWeight:500 }}>
+            ✔ Payment successful — your trip is ready to generate!
+          </div>
+        )}
+        {paymentStatus === "cancelled" && phase === "form" && (
+          <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.6rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>
+            Payment cancelled — no charge was made.
+          </div>
+        )}
 
         {/* ── FORM ───────────────────────────────────────────────────────── */}
         {phase === "form" && (
@@ -376,7 +422,7 @@ export default function App() {
 
             <div style={{ height:1, background:"var(--sand)", marginBottom:"1.6rem" }} />
 
-            {isBlocked && <PaywallBanner onSignIn={()=>setShowAuth(true)} />}
+            {isBlocked && <PaywallBanner onSignIn={()=>setShowAuth(true)} onPay={startCheckout} user={user} />}
 
             <FieldRow number={1} label="Destination" onRandomize={()=>setDestination(randomPick(DESTINATIONS))}>
               <FocusInput type="text" placeholder="e.g. Hanoi, Vietnam or Southeast Asia" value={destination} onChange={e=>setDestination(e.target.value)} />
