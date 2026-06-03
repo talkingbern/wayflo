@@ -293,7 +293,7 @@ export default function App() {
     if (!user) { setShowAuth(true); return; }
     if (saving || saved) return;
     setSaving(true);
-    const payload = {
+    const { error } = await supabase.from("trips").insert({
       user_id:      user.id,
       destination,
       date_from:    dateFrom || null,
@@ -303,13 +303,9 @@ export default function App() {
       origin,
       interests,
       itinerary,
-    };
-    console.log("Saving trip with user.id:", user.id);
-    console.log("Payload:", JSON.stringify(payload).slice(0, 200));
-    const { data, error } = await supabase.from("trips").insert(payload).select();
-    console.log("Supabase response — data:", data, "error:", error);
+    });
     if (error) {
-      setError(`Couldn't save: ${error.message} (${error.code})`);
+      setError(`Couldn't save trip. Try again.`);
     } else {
       setSaved(true);
     }
