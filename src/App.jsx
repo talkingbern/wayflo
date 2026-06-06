@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import Auth from "./Auth";
 import TripHistory from "./TripHistory";
+import TripMap from "./TripMap";
 
 const FONT_INJECT = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -157,18 +158,43 @@ function DayCard({ day, index, displayNumber }) {
 }
 
 function HeroPhoto({ query, destination }) {
-  const [loaded,setLoaded] = useState(false);
-  const [errored,setErrored] = useState(false);
-  const url = "https://source.unsplash.com/featured/1200x500?"+encodeURIComponent(query||destination);
-  if (errored) return null;
+  const [url, setUrl]         = useState("");
+  const [credit, setCredit]   = useState(null);
+  const [loaded, setLoaded]   = useState(false);
+  const [errored, setErrored] = useState(false);
+  const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+
+  useEffect(() => {
+    if (!accessKey) return;
+    const q = encodeURIComponent(query || destination);
+    fetch("https://api.unsplash.com/photos/random?query="+q+"&orientation=landscape&client_id="+accessKey)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.urls && data.urls.regular) {
+          setUrl(data.urls.regular);
+          setCredit({ name: data.user?.name, link: data.user?.links?.html });
+        }
+      })
+      .catch(() => setErrored(true));
+  }, [query, destination]);
+
+  if (!accessKey || errored || !url) return null;
+
   return (
-    <div style={{ width:"100%", height:"220px", borderRadius:"12px", overflow:"hidden", background:"var(--sand)", marginBottom:"1.5rem", position:"relative" }}>
-      {!loaded && <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}><Spinner size={22} color="var(--warm-mid)" /></div>}
+    <div style={{ width:"100%", height:"240px", borderRadius:"12px", overflow:"hidden", background:"var(--sand)", marginBottom:"1.5rem", position:"relative" }}>
+      {!loaded && (
+        <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <Spinner size={22} color="var(--warm-mid)" />
+        </div>
+      )}
       <img src={url} alt={destination} onLoad={()=>setLoaded(true)} onError={()=>setErrored(true)}
         style={{ width:"100%", height:"100%", objectFit:"cover", opacity:loaded?1:0, transition:"opacity 0.4s" }} />
-      {loaded && (
-        <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(to top, rgba(26,21,16,0.55), transparent)", padding:"1.5rem 1.2rem 0.7rem" }}>
-          <span style={{ fontSize:"0.65rem", color:"rgba(255,255,255,0.7)", letterSpacing:"0.08em" }}>Photo via Unsplash</span>
+      {loaded && credit && (
+        <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(to top, rgba(26,21,16,0.65), transparent)", padding:"1.5rem 1.2rem 0.7rem", display:"flex", justifyContent:"flex-end" }}>
+          <a href={credit.link+"?utm_source=wayflo&utm_medium=referral"} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize:"0.62rem", color:"rgba(255,255,255,0.75)", letterSpacing:"0.06em", textDecoration:"none" }}>
+            Photo by {credit.name} on Unsplash
+          </a>
         </div>
       )}
     </div>
@@ -691,6 +717,7 @@ export default function App() {
             {phase === "result" && itinerary && (
               <div style={{ animation:"fadeUp 0.4s ease both" }}>
                 <HeroPhoto query={photoQuery} destination={destination} />
+                <TripMap days={itinerary.days} />
                 <div style={{ marginBottom:"1.5rem" }}>
                   <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.35rem" }}>Your itinerary</div>
                   <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.4rem,5vw,2rem)", fontWeight:900, color:"var(--ink)", lineHeight:1.15, marginBottom:"0.65rem" }}>
