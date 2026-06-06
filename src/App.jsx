@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import Auth from "./Auth";
+import TripHistory from "./TripHistory";
 
 const FONT_INJECT = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -178,6 +179,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [showAuth, setShowAuth]   = useState(false);
   const [tripCount, setTripCount] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState("");
   const [paidTrips, setPaidTrips] = useState(0);
 
@@ -358,6 +360,12 @@ export default function App() {
               Back
             </button>
           )}
+          {user && !showHistory && (
+            <button onClick={()=>setShowHistory(true)}
+              style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.35rem 0.85rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
+              My trips
+            </button>
+          )}
           {user ? (
             <div style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
               <span style={{ fontSize:"0.73rem", color:"var(--warm-mid)", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</span>
@@ -376,6 +384,8 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth:680, margin:"0 auto", padding:"1.25rem" }}>
+        {showHistory && <TripHistory onClose={()=>setShowHistory(false)} />}
+        {!showHistory && (
 
         {!user && tripCount === 0 && phase === "form" && (
           <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.8rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1rem" }}>
@@ -524,6 +534,7 @@ export default function App() {
             </div>
           </div>
         )}
+      )}
       </main>
 
       <footer style={{ textAlign:"center", padding:"2rem 1rem 1.5rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em" }}>
