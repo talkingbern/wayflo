@@ -45,9 +45,9 @@ function DayCard({ day, index, displayNumber, photo, dayRef }) {
   return (
     <div ref={dayRef} style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"10px", overflow:"hidden", animation:"fadeUp 0.35s ease both", animationDelay:index*0.05+"s" }}>
       {photo && (
-        <div style={{ width:"100%", height:"140px", overflow:"hidden", position:"relative" }}>
+        <div style={{ width:"100%", aspectRatio:"16/7", overflow:"hidden", position:"relative" }}>
           <img src={photo.url} alt={cleanTitle}
-            style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center" }} />
           {photo.credit && (
             <a href={photo.credit.link+"?utm_source=wayflo&utm_medium=referral"} target="_blank" rel="noopener noreferrer"
               style={{ position:"absolute", bottom:"4px", right:"8px", fontSize:"0.58rem", color:"rgba(255,255,255,0.75)", textDecoration:"none" }}>
@@ -88,7 +88,8 @@ export default function TripHistory({ onClose }) {
   const [error, setError]       = useState("");
   const [deleting, setDeleting] = useState(null);
   const [dayPhotos, setDayPhotos] = useState({});
-  const dayRefs = useRef({});
+  const dayRefs    = useRef({});
+  const photoCache = useRef({}); // keyed by tripId_dayIndex to avoid refetching
 
   useEffect(() => {
     async function load() {
@@ -101,24 +102,39 @@ export default function TripHistory({ onClose }) {
     load();
   }, []);
 
-  // Fetch photos for selected trip days
+  // Fetch photos for selected trip days — cached by tripId+dayIndex
   useEffect(() => {
     if (!selected || !UNSPLASH_KEY) return;
-    setDayPhotos({});
     const days = selected.itinerary?.days || [];
+    const newPhotos = {};
+    let anyNew = false;
     days.forEach((day, i) => {
-      // Only fetch for every other day to save API calls
       if (i % 2 !== 0) return;
+      const cacheKey = selected.id + "_" + i;
+      if (photoCache.current[cacheKey]) {
+        newPhotos[i] = photoCache.current[cacheKey];
+      }
+    });
+    // Set cached ones immediately
+    if (Object.keys(newPhotos).length > 0) setDayPhotos(newPhotos);
+    // Fetch missing ones
+    days.forEach((day, i) => {
+      if (i % 2 !== 0) return;
+      const cacheKey = selected.id + "_" + i;
+      if (photoCache.current[cacheKey]) return; // already cached
+      anyNew = true;
       const query = day.locationName || day.title?.replace(/^Day \d+\s*[-—]\s*/,"") + " " + selected.destination;
       fetch("https://api.unsplash.com/photos/random?query="+encodeURIComponent(query)+"&orientation=landscape&client_id="+UNSPLASH_KEY)
         .then(r=>r.json())
         .then(data=>{
           if (data?.urls?.regular) {
-            setDayPhotos(prev=>({ ...prev, [i]:{ url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } } }));
+            const photo = { url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } };
+            photoCache.current[cacheKey] = photo;
+            setDayPhotos(prev=>({ ...prev, [i]:photo }));
           }
         }).catch(()=>{});
     });
-  }, [selected]);
+  }, [selected?.id]);
 
   function scrollToDay(dayIndex) {
     const ref = dayRefs.current[dayIndex];
@@ -186,7 +202,7 @@ export default function TripHistory({ onClose }) {
           {itinerary.intro && <p style={{ fontSize:"0.88rem", lineHeight:1.7, color:"var(--ink-soft)", marginBottom:"1.25rem" }}>{itinerary.intro}</p>}
 
           {/* Map */}
-          <TripMap days={itinerary.days} onPinClick={scrollToDay} />
+          <TripMap days={itinerary.days} />
 
           <div style={{ height:1, background:"var(--sand)", marginBottom:"1.1rem" }} />
 

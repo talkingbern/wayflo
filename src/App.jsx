@@ -146,8 +146,8 @@ function DayCard({ day, index, photo, dayRef }) {
   return (
     <div ref={dayRef} style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"10px", overflow:"hidden", animation:"fadeUp 0.35s ease both", animationDelay:index*0.05+"s" }}>
       {photo && (
-        <div style={{ width:"100%", height:"150px", overflow:"hidden", position:"relative" }}>
-          <img src={photo.url} alt={cleanTitle} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+        <div style={{ width:"100%", aspectRatio:"16/7", overflow:"hidden", position:"relative" }}>
+          <img src={photo.url} alt={cleanTitle} style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center" }} />
           {photo.credit && (
             <a href={photo.credit.link+"?utm_source=wayflo&utm_medium=referral"} target="_blank" rel="noopener noreferrer"
               style={{ position:"absolute", bottom:"4px", right:"8px", fontSize:"0.58rem", color:"rgba(255,255,255,0.8)", textDecoration:"none" }}>
@@ -610,7 +610,31 @@ export default function App() {
 
               <FieldCard number={2} icon="🛫" label="Travelling from" hint="Helps estimate your flight cost"
                 action={<DiceBtn onClick={()=>{ const o=["New York, USA","London, UK","Sydney, Australia","Toronto, Canada","Berlin, Germany","Sao Paulo, Brazil"]; setOrigin(o[Math.floor(Math.random()*o.length)]); }} title="Random origin" />}>
-                <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} />
+                <div style={{ display:"flex", gap:"0.5rem", alignItems:"center" }}>
+                  <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} style={{ flex:1 }} />
+                  <button
+                    type="button"
+                    title="Use my current location"
+                    onClick={()=>{
+                      if (!navigator.geolocation) return;
+                      navigator.geolocation.getCurrentPosition(async pos => {
+                        const { latitude, longitude } = pos.coords;
+                        try {
+                          const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json");
+                          const d = await r.json();
+                          const city = d.address?.city || d.address?.town || d.address?.village || "";
+                          const country = d.address?.country || "";
+                          if (city) setOrigin(city + (country ? ", " + country : ""));
+                        } catch(e) {}
+                      }, () => {});
+                    }}
+                    style={{ padding:"0.65rem 0.75rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
+                    onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
+                    onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}
+                  >
+                    📍
+                  </button>
+                </div>
               </FieldCard>
 
               <FieldCard number={3} icon="📅" label="Travel Dates" hint="When are you going?"
@@ -637,10 +661,23 @@ export default function App() {
 
               <FieldCard number={5} icon="🧭" label="Travel Style" hint="How do you like to move through a place?"
                 action={<DiceBtn onClick={()=>setTravelStyle(STYLES[Math.floor(Math.random()*STYLES.length)])} title="Random style" />}>
-                <SelectInput value={travelStyle} onChange={e=>setTravelStyle(e.target.value)}>
+                <SelectInput
+                  value={STYLES.includes(travelStyle) || travelStyle==="" ? travelStyle : "__custom__"}
+                  onChange={e=>{ if(e.target.value==="__custom__") setTravelStyle("__custom__"); else setTravelStyle(e.target.value); }}>
                   <option value="">Choose your style</option>
                   {STYLES.map(s=><option key={s}>{s}</option>)}
+                  <option value="__custom__">Describe my own style...</option>
                 </SelectInput>
+                {travelStyle === "__custom__" && (
+                  <FocusInput
+                    as="textarea"
+                    rows={2}
+                    placeholder="e.g. I like getting lost in local neighbourhoods, avoiding tourist traps..."
+                    value={""}
+                    onChange={e=>setTravelStyle(e.target.value)}
+                    style={{ marginTop:"0.5rem", resize:"none", fontSize:"0.88rem", lineHeight:1.5 }}
+                  />
+                )}
               </FieldCard>
 
               <FieldCard number={6} icon="❤️" label="Interests" hint="What makes a trip worth it for you?">
@@ -702,7 +739,7 @@ export default function App() {
                 <span>Transport times and prices are estimates — book ahead for lower fares, expect higher costs last-minute. Always verify opening hours and availability before you go.</span>
               </div>
 
-              <TripMap days={itinerary.days} onPinClick={scrollToDay} />
+              <TripMap days={itinerary.days} />
 
               <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>
                 {itinerary.days.map((day,i)=>(

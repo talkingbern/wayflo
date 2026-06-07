@@ -3,27 +3,27 @@ import { useEffect, useRef, useState } from "react";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
-// Detect transport icon from transportType field or content fallback
 function getTransportIcon(day, isFirst, isLast) {
   if (isLast) return "🏠";
-  const type = (day.transportType || "").toLowerCase();
+  const type    = (day.transportType || "").toLowerCase();
   const content = (day.content || "").toLowerCase();
-  if (type === "flight" || (!type && isFirst && (content.includes("fly") || content.includes("flight") || content.includes("airport")))) return "✈";
-  if (type === "train" || (!type && (content.includes("train") || content.includes("rail")))) return "🚂";
-  if (type === "bus" || (!type && (content.includes("bus") || content.includes("coach")))) return "🚌";
-  if (type === "ferry" || (!type && (content.includes("ferry") || content.includes("boat")))) return "⛴";
-  if (type === "drive" || (!type && (content.includes("drive") || content.includes("car")))) return "🚗";
-  if (isFirst) return "✈"; // default first day
-  return null; // regular day — use number
+  if (type === "flight"  || (!type && isFirst && (content.includes("fly") || content.includes("flight") || content.includes("airport")))) return "✈";
+  if (type === "train"   || (!type && (content.includes("train") || content.includes("rail")))) return "🚂";
+  if (type === "bus"     || (!type && (content.includes("bus")   || content.includes("coach")))) return "🚌";
+  if (type === "ferry"   || (!type && (content.includes("ferry") || content.includes("boat")))) return "⛴";
+  if (type === "drive"   || (!type && (content.includes("drive") || content.includes("car")))) return "🚗";
+  if (isFirst) return "✈";
+  return null;
 }
 
-export default function TripMap({ days, onPinClick }) {
-  const containerRef  = useRef(null);
-  const mapRef        = useRef(null);
+export default function TripMap({ days }) {
+  const containerRef    = useRef(null);
+  const mapRef          = useRef(null);
+  const initialBoundsRef = useRef(null);
   const [loaded, setLoaded]     = useState(false);
   const [error, setError]       = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  const [activePin, setActivePin] = useState(null); // index of active pin
+  const [activePin, setActivePin] = useState(null);
 
   const pins = (days || [])
     .map((d, i) => ({ ...d, index: i }))
@@ -33,16 +33,22 @@ export default function TripMap({ days, onPinClick }) {
     if (!mapRef.current || !mapReady) return;
     mapRef.current.flyTo({
       center: [parseFloat(pin.lng), parseFloat(pin.lat)],
-      zoom: 12,
-      duration: 1000,
+      zoom: 13,
+      duration: 900,
       essential: true,
     });
   }
 
+  function resetView() {
+    if (!mapRef.current || !mapReady || !initialBoundsRef.current) return;
+    mapRef.current.fitBounds(initialBoundsRef.current, { padding: 50, duration: 900 });
+    setActivePin(null);
+  }
+
   function handlePinClick(pin) {
-    setActivePin(pin.index === activePin ? null : pin.index);
-    flyToPin(pin);
-    if (onPinClick) onPinClick(pin.index);
+    const newActive = pin.index === activePin ? null : pin.index;
+    setActivePin(newActive);
+    if (newActive !== null) flyToPin(pin);
   }
 
   useEffect(() => {
@@ -74,10 +80,11 @@ export default function TripMap({ days, onPinClick }) {
       const mapboxgl = window.mapboxgl;
       mapboxgl.accessToken = MAPBOX_TOKEN;
 
-      const lngs = pins.map(p => parseFloat(p.lng));
+      const lngs  = pins.map(p => parseFloat(p.lng));
       const lats  = pins.map(p => parseFloat(p.lat));
-      const pad   = pins.length === 1 ? 0.05 : 0.5;
+      const pad   = pins.length === 1 ? 0.05 : 0.4;
       const bounds = [[Math.min(...lngs)-pad, Math.min(...lats)-pad],[Math.max(...lngs)+pad, Math.max(...lats)+pad]];
+      initialBoundsRef.current = bounds;
 
       const map = new mapboxgl.Map({
         container: containerRef.current,
@@ -97,9 +104,9 @@ export default function TripMap({ days, onPinClick }) {
         }
 
         pins.forEach((pin, i) => {
-          const isFirst = i === 0;
-          const isLast  = i === pins.length - 1;
-          const icon    = getTransportIcon(pin, isFirst, isLast);
+          const isFirst   = i === 0;
+          const isLast    = i === pins.length - 1;
+          const icon      = getTransportIcon(pin, isFirst, isLast);
           const isSpecial = icon !== null;
 
           const el = document.createElement("div");
@@ -133,27 +140,40 @@ export default function TripMap({ days, onPinClick }) {
 
   if (!MAPBOX_TOKEN || pins.length === 0 || error) return null;
 
-  const activePinData = activePin !== null ? pins.find(p => p.index === activePin) : null;
   const activeDayData = activePin !== null ? (days || [])[activePin] : null;
+  const activePinData = activePin !== null ? pins.find(p => p.index === activePin) : null;
 
   return (
     <div style={{ marginBottom:"1.5rem" }}>
       <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.5rem" }}>Trip map</div>
 
-      {/* Map */}
-      <div style={{ position:"relative", borderRadius:"12px", overflow:"hidden", border:"1px solid var(--sand)", height:"260px", background:"var(--sand)" }}>
+      {/* Map container */}
+      <div style={{ position:"relative", borderRadius: activeDayData ? "12px 12px 0 0" : "12px", overflow:"hidden", border:"1px solid var(--sand)", borderBottom: activeDayData ? "none" : "1px solid var(--sand)", height:"280px", background:"var(--sand)" }}>
         {!loaded && (
           <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", zIndex:1 }}>
             <div style={{ width:28, height:28, borderRadius:"50%", border:"3px solid #e0d5bf", borderTopColor:"#c4622d", animation:"spin 0.8s linear infinite" }} />
           </div>
         )}
         <div ref={containerRef} style={{ width:"100%", height:"100%", opacity:loaded?1:0, transition:"opacity 0.4s" }} />
+
+        {/* Home / reset button */}
+        {loaded && (
+          <button
+            onClick={resetView}
+            title="Reset view"
+            style={{ position:"absolute", bottom:10, right:10, zIndex:10, background:"white", border:"1px solid #ccc", borderRadius:"6px", width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", fontSize:"14px", boxShadow:"0 1px 4px rgba(0,0,0,0.2)", transition:"background 0.15s" }}
+            onMouseOver={e=>e.currentTarget.style.background="#f5f0e8"}
+            onMouseOut={e=>e.currentTarget.style.background="white"}
+          >
+            🏠
+          </button>
+        )}
       </div>
 
-      {/* Inline day panel — appears below map when a pin is clicked */}
+      {/* Inline day panel */}
       {activeDayData && (
-        <div style={{ background:"var(--white)", border:"1px solid var(--rust)", borderTop:"none", borderRadius:"0 0 12px 12px", padding:"0.9rem 1.1rem", animation:"fadeUp 0.2s ease both" }}>
-          <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:"0.5rem" }}>
+        <div style={{ background:"var(--white)", border:"1px solid var(--rust)", borderTop:"2px solid var(--rust)", borderRadius:"0 0 12px 12px", padding:"0.9rem 1.1rem", animation:"fadeUp 0.2s ease both" }}>
+          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:"0.5rem" }}>
             <div style={{ display:"flex", alignItems:"baseline", gap:"0.5rem" }}>
               <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.1rem", fontWeight:900, color:"var(--rust)" }}>
                 {String(activePin).padStart(2,"0")}
@@ -163,13 +183,28 @@ export default function TripMap({ days, onPinClick }) {
               </span>
             </div>
             <button onClick={()=>setActivePin(null)}
-              style={{ background:"none", border:"none", cursor:"pointer", color:"var(--warm-mid)", fontSize:"1rem", lineHeight:1, padding:"0 0.2rem" }}>
+              style={{ background:"none", border:"none", cursor:"pointer", color:"var(--warm-mid)", fontSize:"1.1rem", lineHeight:1, padding:"0 0.2rem", flexShrink:0 }}>
               ×
             </button>
           </div>
+
           {activePinData?.locationName && (
-            <div style={{ fontSize:"0.72rem", color:"var(--warm-mid)", marginBottom:"0.5rem" }}>📍 {activePinData.locationName}</div>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"0.55rem" }}>
+              <span style={{ fontSize:"0.72rem", color:"var(--warm-mid)" }}>📍 {activePinData.locationName}</span>
+              {/* Navigate link */}
+              <a
+                href={"https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(activePinData.locationName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize:"0.7rem", color:"var(--rust)", textDecoration:"none", display:"flex", alignItems:"center", gap:"0.25rem", fontWeight:500, border:"1px solid var(--rust)", borderRadius:"999px", padding:"0.15rem 0.55rem", transition:"background 0.15s" }}
+                onMouseOver={e=>e.currentTarget.style.background="#fff8f5"}
+                onMouseOut={e=>e.currentTarget.style.background="transparent"}
+              >
+                Navigate →
+              </a>
+            </div>
           )}
+
           <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:"0.3rem" }}>
             {activeDayData.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean).map((b,i)=>(
               <li key={i} style={{ display:"flex", gap:"0.45rem", fontSize:"0.81rem", lineHeight:1.5, color:"var(--ink-soft)" }}>
@@ -181,12 +216,12 @@ export default function TripMap({ days, onPinClick }) {
         </div>
       )}
 
-      {/* Scrollable legend pills */}
-      <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginTop: activeDayData ? "0.75rem" : "0.6rem" }}>
+      {/* Legend pills */}
+      <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginTop:"0.6rem" }}>
         {pins.map((pin, i) => {
-          const isFirst = i === 0;
-          const isLast  = i === pins.length - 1;
-          const icon    = getTransportIcon(pin, isFirst, isLast);
+          const isFirst  = i === 0;
+          const isLast   = i === pins.length - 1;
+          const icon     = getTransportIcon(pin, isFirst, isLast);
           const isActive = activePin === pin.index;
           return (
             <button key={i} type="button" onClick={()=>handlePinClick(pin)}
