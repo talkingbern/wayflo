@@ -697,6 +697,11 @@ export default function App() {
 
               <div style={{ height:1, background:"var(--sand)", marginBottom:"1.25rem" }} />
 
+              <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"8px", padding:"0.6rem 1rem", fontSize:"0.75rem", color:"var(--warm-mid)", marginBottom:"1.25rem", display:"flex", gap:"0.5rem", alignItems:"flex-start", lineHeight:1.5 }}>
+                <span style={{ flexShrink:0 }}>⚠️</span>
+                <span>Transport times and prices are estimates — book ahead for lower fares, expect higher costs last-minute. Always verify opening hours and availability before you go.</span>
+              </div>
+
               <TripMap days={itinerary.days} onPinClick={scrollToDay} />
 
               <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>

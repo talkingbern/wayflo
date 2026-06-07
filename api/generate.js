@@ -14,13 +14,19 @@ export default async function handler(req, res) {
   const isRefinement = Boolean(refineFeedback && previousItinerary);
 
   const systemPrompt = `You are Wayflo, a travel planner for budget backpackers aged 18-25.
-Your output is ALWAYS a single valid JSON object — no markdown fences, no prose outside the JSON.
+Your output is ALWAYS a single valid JSON object, no markdown fences, no prose outside the JSON.
 Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each).
-Never pad with cost breakdowns or running totals — mention prices only when genuinely surprising or useful.
-Tone: excited friend who has been there, not a travel brochure.`;
+Tone: excited friend who has been there, not a travel brochure.
+
+CRITICAL RULES FOR TRANSPORT ESTIMATES:
+- Always give price RANGES not single figures. Format: "from ~$X, typically $X-$X booked in advance"
+- Always give time RANGES not exact times. Format: "allow X-Xhrs depending on route/stops"
+- The lower end should reflect best-case advance booking. The upper end should reflect average/walk-up.
+- Never imply one price is what the user will pay. Prices vary by season and booking time.
+- For flights specifically: note that prices vary hugely and to set a Google Flights alert.`;
 
   const tripContext = `Destination: ${destination}
-${origin ? `Travelling from: ${origin}` : ""}
+${origin ? "Travelling from: " + origin : ""}
 Dates: ${dateFrom} to ${dateTo} (${tripDays} days)
 Total budget: ${budget}
 Travel style: ${travelStyle}
@@ -31,25 +37,26 @@ Interests: ${Array.isArray(interests) ? interests.join(", ") : interests || "gen
 ${tripContext}
 
 Include:
-- A Day 0 "Getting There" entry covering travel from origin to destination
+- A Day 0 "Getting There" entry with honest price/time ranges for the journey
 - One entry per full day (Day 1 through Day ${tripDays})
 - A final "Getting Home" entry
 
 Each day: 3-5 bullet points. Real place names. Scannable, not an essay.
 
-For each day, provide the single most relevant lat/lng coordinate (the main location or highlight for that day).
+For each day provide the main coordinate and location. For Day 0 and Getting Home also provide transportType.
 
 JSON format (no markdown fences):
 {
-  "intro": "2 punchy sentences. Make it exciting.",
-  "photoQuery": "short Unsplash search query for a stunning photo, e.g. 'Hanoi Vietnam street'",
+  "intro": "2 punchy sentences.",
+  "photoQuery": "short Unsplash search query e.g. 'Ljubljana Slovenia old town'",
   "days": [
     {
       "title": "Day 0 — Getting There",
-      "content": "• bullet\\n• bullet\\n• bullet",
-      "lat": 21.0285,
-      "lng": 105.8542,
-      "locationName": "Hanoi, Vietnam"
+      "content": "bullet\nbullet\nbullet",
+      "lat": 46.0569,
+      "lng": 14.5058,
+      "locationName": "Ljubljana, Slovenia",
+      "transportType": "train"
     }
   ]
 }`;
@@ -62,7 +69,7 @@ ${tripContext}
 Previous itinerary:
 ${previousItinerary}
 
-Return only the updated JSON in the same format including lat/lng for each day. No markdown fences.`;
+Return only the updated JSON in the same format with lat, lng, locationName and transportType per day. No markdown fences.`;
 
   let anthropicRes;
   try {
@@ -80,15 +87,14 @@ Return only the updated JSON in the same format including lat/lng for each day. 
         messages: [{ role: "user", content: isRefinement ? refinePrompt : freshPrompt }],
       }),
     });
-  } catch (e) {
-    console.error("Network error:", e);
+  } catch(e) {
     return res.status(502).json({ error: "Could not reach AI service." });
   }
 
   if (!anthropicRes.ok) {
     const err = await anthropicRes.text();
     console.error("Anthropic error:", anthropicRes.status, err);
-    return res.status(502).json({ error: `AI service error: ${anthropicRes.status}` });
+    return res.status(502).json({ error: "AI service error: " + anthropicRes.status });
   }
 
   const data = await anthropicRes.json();
