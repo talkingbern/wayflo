@@ -4,6 +4,8 @@ import Auth from "./Auth";
 import TripHistory from "./TripHistory";
 import TripMap from "./TripMap";
 import LandingPage from "./LandingPage";
+import ErrorBoundary from "./ErrorBoundary";
+import { buildBookingLinks } from "./bookingLinks";
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
@@ -224,7 +226,7 @@ function PaywallBanner({ onSignIn, onPay, user }) {
   return (
     <div style={{ background:"var(--white)", border:"2px solid var(--rust)", borderRadius:"12px", padding:"1.5rem", textAlign:"center", marginBottom:"1.5rem", animation:"fadeUp 0.3s ease both" }}>
       <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, marginBottom:"0.4rem" }}>Your free trip is used up</div>
-      <p style={{ fontSize:"0.85rem", color:"var(--warm-mid)", lineHeight:1.6, marginBottom:"1rem" }}>Each new itinerary is $5 — one flat fee, no subscription.</p>
+      <p style={{ fontSize:"0.85rem", color:"var(--warm-mid)", lineHeight:1.6, marginBottom:"1rem" }}>Each new itinerary is $2 — one flat fee, no subscription.</p>
       {!user ? (
         <button onClick={onSignIn} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>Sign in to continue</button>
       ) : (
@@ -424,8 +426,18 @@ export default function App() {
   }
   function randomDatesSet() { const d=randomDates(); setDateFrom(d.from); setDateTo(d.to); }
 
-  function parseItinerary(text) {
-    try { return JSON.parse(text.replace(/```json|```/g,"").trim()); }
+  function parseItinerary(text, tripContext) {
+    try {
+      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      // Enrich with deterministic booking links
+      if (parsed.days && tripContext) {
+        parsed.days = parsed.days.map(day => ({
+          ...day,
+          bookingLinks: buildBookingLinks(day, tripContext),
+        }));
+      }
+      return parsed;
+    }
     catch { return { intro:"", photoQuery:"", days:[{ title:"Your Itinerary", content:text, bookingLinks:[] }] }; }
   }
 
@@ -449,7 +461,7 @@ export default function App() {
     setError(""); setPhase("loading");
     try {
       const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, userId: user?.id || null, paidTrips });
-      const parsed = parseItinerary(text);
+      const parsed = parseItinerary(text, { origin, destination, dateFrom, dateTo });
       setRawText(text); setItinerary(parsed);
       setPhotoQuery(parsed.photoQuery||destination);
       setTripCount(c=>c+1);
@@ -468,7 +480,7 @@ export default function App() {
     setRefining(true); setError("");
     try {
       const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, refineFeedback, previousItinerary:rawText, userId:user?.id||null, paidTrips });
-      const parsed = parseItinerary(text);
+      const parsed = parseItinerary(text, { origin, destination, dateFrom, dateTo });
       setRawText(text); setItinerary(parsed);
       setPhotoQuery(parsed.photoQuery||destination);
       setRefineFeedback("");
@@ -576,7 +588,7 @@ export default function App() {
           {landingHeader}
           <LandingPage onGetStarted={()=>setShowLanding(false)} />
           <footer style={{ textAlign:"center", padding:"1.5rem 1rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
-            WAYFLO · First trip free · $5/trip after that
+            WAYFLO · First trip free · $2/trip after that
           </footer>
         </div>
       )}
@@ -757,7 +769,9 @@ export default function App() {
                     <span>Transport times and prices are estimates — book ahead for lower fares, expect higher costs last-minute. Always verify opening hours and availability before you go.</span>
                   </div>
 
-                  <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
+                  <ErrorBoundary fallback={null}>
+                    <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
+                  </ErrorBoundary>
 
                   <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>
                     {itinerary.days.map((day,i)=>(
@@ -788,7 +802,7 @@ export default function App() {
             </div>
           </main>
           <footer style={{ textAlign:"center", padding:"2rem 1rem 1.5rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
-            WAYFLO · First trip free · $5/trip after that
+            WAYFLO · First trip free · $2/trip after that
           </footer>
         </>
       )}

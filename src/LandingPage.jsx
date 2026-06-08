@@ -38,7 +38,7 @@ export default function LandingPage({ onGetStarted }) {
           {/* Stats row */}
           <div style={{ display:"flex", gap:"2rem", flexWrap:"wrap", marginTop:"3rem", paddingTop:"2rem", borderTop:"1px solid var(--sand)" }}>
             {[
-              { number:"$5", label:"per itinerary after your first free one" },
+              { number:"$2", label:"per itinerary after your first free one" },
               { number:"60s", label:"average generation time" },
               { number:"100+", label:"destinations covered" },
             ].map(s => (
@@ -129,7 +129,7 @@ export default function LandingPage({ onGetStarted }) {
               "✓  Day-by-day itineraries for 100+ destinations",
               "✓  Real hostel and transport recommendations",
               "✓  Budget breakdowns that don't lie",
-              "✓  First trip completely free, $5 after that",
+              "✓  First trip completely free, $2 after that",
               "✓  No subscription, no commitment",
             ].map(line => (
               <div key={line} style={{ fontSize:"0.85rem", color:"rgba(255,255,255,0.75)", display:"flex", gap:"0.5rem" }}>{line}</div>

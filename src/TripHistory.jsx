@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import TripMap from "./TripMap";
+import ErrorBoundary from "./ErrorBoundary";
+import { buildBookingLinks } from "./bookingLinks";
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
@@ -39,9 +41,10 @@ function TripCard({ trip, onOpen }) {
   );
 }
 
-function DayCard({ day, index, displayNumber, photo, dayRef }) {
-  const bullets = day.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean);
-  const cleanTitle = day.title.replace(/^Day \d+\s*[-—]\s*/,"");
+function DayCard({ day, index, displayNumber, photo, dayRef, tripMeta }) {
+  const bullets      = day.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean);
+  const cleanTitle   = day.title.replace(/^Day \d+\s*[-—]\s*/,"");
+  const bookingLinks = tripMeta ? buildBookingLinks(day, tripMeta) : (day.bookingLinks || []);
   return (
     <div ref={dayRef} style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"10px", overflow:"hidden", animation:"fadeUp 0.35s ease both", animationDelay:index*0.05+"s" }}>
       {photo && (
@@ -61,7 +64,7 @@ function DayCard({ day, index, displayNumber, photo, dayRef }) {
           <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, color:"var(--rust)", flexShrink:0 }}>{displayNumber}</span>
           <span style={{ fontWeight:600, fontSize:"0.9rem", color:"var(--ink)" }}>{cleanTitle}</span>
         </div>
-        <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:"0.4rem" }}>
+        <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:"0.4rem", marginBottom:bookingLinks.length>0?"0.9rem":0 }}>
           {bullets.map((b,i)=>(
             <li key={i} style={{ display:"flex", gap:"0.5rem", fontSize:"0.84rem", lineHeight:1.5, color:"var(--ink-soft)" }}>
               <span style={{ color:"var(--rust)", flexShrink:0 }}>→</span>
@@ -69,6 +72,18 @@ function DayCard({ day, index, displayNumber, photo, dayRef }) {
             </li>
           ))}
         </ul>
+        {bookingLinks.length > 0 && (
+          <div style={{ borderTop:"1px solid var(--sand)", paddingTop:"0.75rem", display:"flex", flexWrap:"wrap", gap:"0.5rem" }}>
+            {bookingLinks.map((link,i)=>(
+              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                style={{ display:"inline-flex", alignItems:"center", gap:"0.3rem", padding:"0.3rem 0.75rem", background:"var(--paper)", border:"1px solid var(--sand)", borderRadius:"999px", fontSize:"0.74rem", color:"var(--rust)", textDecoration:"none", fontWeight:500, transition:"border-color 0.15s, background 0.15s" }}
+                onMouseOver={e=>{ e.currentTarget.style.borderColor="var(--rust)"; e.currentTarget.style.background="#fff8f5"; }}
+                onMouseOut={e=>{ e.currentTarget.style.borderColor="var(--sand)"; e.currentTarget.style.background="var(--paper)"; }}>
+                🔗 {link.label}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -202,7 +217,9 @@ export default function TripHistory({ onClose }) {
           {itinerary.intro && <p style={{ fontSize:"0.88rem", lineHeight:1.7, color:"var(--ink-soft)", marginBottom:"1.25rem" }}>{itinerary.intro}</p>}
 
           {/* Map */}
-          <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
+          <ErrorBoundary fallback={null}>
+            <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
+          </ErrorBoundary>
 
           <div style={{ height:1, background:"var(--sand)", marginBottom:"1.1rem" }} />
 
@@ -213,6 +230,7 @@ export default function TripHistory({ onClose }) {
                 displayNumber={getDayDisplayNumber(day.title,i)}
                 photo={dayPhotos[i]}
                 dayRef={el=>{ dayRefs.current[i]=el; }}
+                tripMeta={{ origin:selected.origin, destination:selected.destination, dateFrom:selected.date_from, dateTo:selected.date_to }}
               />
             ))}
           </div>

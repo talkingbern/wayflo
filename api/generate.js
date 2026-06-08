@@ -69,18 +69,6 @@ Include:
 
 Each day: 3-5 bullet points. Real place names. Scannable, not an essay.
 
-For Day 0 and Getting Home, include a "bookingLinks" array with 1-3 relevant booking links.
-Each booking link should be a deep link prefilled with the route where possible.
-
-Use these link formats:
-- Flights: https://www.google.com/travel/flights/search?tfs=... or just https://www.skyscanner.com
-- European trains: https://www.trainline.com/search/[origin]/[destination] 
-- Flixbus: https://global.flixbus.com
-- Hostelworld for accommodation: https://www.hostelworld.com/search?search_keywords=[city]&date_from=[YYYY-MM-DD]&date_to=[YYYY-MM-DD]
-- Booking.com: https://www.booking.com/searchresults.html?ss=[city]&checkin=[YYYY-MM-DD]&checkout=[YYYY-MM-DD]
-
-JSON format (no markdown fences):
-{
   "intro": "2 punchy sentences.",
   "photoQuery": "short Unsplash search query",
   "days": [
@@ -91,10 +79,6 @@ JSON format (no markdown fences):
       "lng": 14.5058,
       "locationName": "Ljubljana, Slovenia",
       "transportType": "train",
-      "bookingLinks": [
-        { "label": "Book train on Trainline", "url": "https://www.trainline.com" },
-        { "label": "Find hostels in Ljubljana", "url": "https://www.hostelworld.com/search?search_keywords=Ljubljana&date_from=2026-08-01&date_to=2026-08-07" }
-      ]
     },
     {
       "title": "Day 1 — Title",
@@ -102,9 +86,6 @@ JSON format (no markdown fences):
       "lat": 46.0569,
       "lng": 14.5058,
       "locationName": "Ljubljana Old Town",
-      "bookingLinks": []
-    }
-  ]
 }`;
 
   const refinePrompt = `Update this itinerary based on feedback: ${refineFeedback}
@@ -112,7 +93,7 @@ JSON format (no markdown fences):
 Original trip: ${tripContext}
 Previous itinerary: ${previousItinerary}
 
-Return only the updated JSON in the same format with bookingLinks per day. No markdown fences.`;
+Return only the updated JSON in the same format. No markdown fences.`;
 
   let anthropicRes;
   try {
