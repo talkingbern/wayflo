@@ -202,7 +202,7 @@ export default function TripHistory({ onClose }) {
           {itinerary.intro && <p style={{ fontSize:"0.88rem", lineHeight:1.7, color:"var(--ink-soft)", marginBottom:"1.25rem" }}>{itinerary.intro}</p>}
 
           {/* Map */}
-          <TripMap days={itinerary.days} />
+          <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
 
           <div style={{ height:1, background:"var(--sand)", marginBottom:"1.1rem" }} />
 

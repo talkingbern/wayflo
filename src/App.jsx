@@ -3,6 +3,7 @@ import { supabase } from "./supabaseClient";
 import Auth from "./Auth";
 import TripHistory from "./TripHistory";
 import TripMap from "./TripMap";
+import LandingPage from "./LandingPage";
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
@@ -138,11 +139,12 @@ function getDayDisplayNumber(title, index) {
   return String(index).padStart(2,"0");
 }
 
-// Day card with optional photo
 function DayCard({ day, index, photo, dayRef }) {
-  const bullets = day.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean);
-  const cleanTitle = day.title.replace(/^Day \d+\s*[-—]\s*/,"");
-  const displayNumber = getDayDisplayNumber(day.title, index);
+  const bullets      = day.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean);
+  const cleanTitle   = day.title.replace(/^Day \d+\s*[-—]\s*/,"");
+  const displayNum   = getDayDisplayNumber(day.title, index);
+  const bookingLinks = day.bookingLinks || [];
+
   return (
     <div ref={dayRef} style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"10px", overflow:"hidden", animation:"fadeUp 0.35s ease both", animationDelay:index*0.05+"s" }}>
       {photo && (
@@ -158,10 +160,10 @@ function DayCard({ day, index, photo, dayRef }) {
       )}
       <div style={{ padding:"1rem 1.2rem" }}>
         <div style={{ display:"flex", alignItems:"baseline", gap:"0.6rem", marginBottom:"0.65rem" }}>
-          <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, color:"var(--rust)", flexShrink:0 }}>{displayNumber}</span>
+          <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, color:"var(--rust)", flexShrink:0 }}>{displayNum}</span>
           <span style={{ fontWeight:600, fontSize:"0.9rem", color:"var(--ink)" }}>{cleanTitle}</span>
         </div>
-        <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:"0.4rem" }}>
+        <ul style={{ listStyle:"none", display:"flex", flexDirection:"column", gap:"0.4rem", marginBottom: bookingLinks.length > 0 ? "0.9rem" : 0 }}>
           {bullets.map((b,i)=>(
             <li key={i} style={{ display:"flex", gap:"0.5rem", fontSize:"0.84rem", lineHeight:1.5, color:"var(--ink-soft)" }}>
               <span style={{ color:"var(--rust)", flexShrink:0 }}>→</span>
@@ -169,29 +171,35 @@ function DayCard({ day, index, photo, dayRef }) {
             </li>
           ))}
         </ul>
+        {bookingLinks.length > 0 && (
+          <div style={{ borderTop:"1px solid var(--sand)", paddingTop:"0.75rem", display:"flex", flexWrap:"wrap", gap:"0.5rem" }}>
+            {bookingLinks.map((link, i) => (
+              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                style={{ display:"inline-flex", alignItems:"center", gap:"0.3rem", padding:"0.3rem 0.75rem", background:"var(--paper)", border:"1px solid var(--sand)", borderRadius:"999px", fontSize:"0.74rem", color:"var(--rust)", textDecoration:"none", fontWeight:500, transition:"border-color 0.15s, background 0.15s" }}
+                onMouseOver={e=>{ e.currentTarget.style.borderColor="var(--rust)"; e.currentTarget.style.background="#fff8f5"; }}
+                onMouseOut={e=>{ e.currentTarget.style.borderColor="var(--sand)"; e.currentTarget.style.background="var(--paper)"; }}>
+                🔗 {link.label}
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Hero photo using Unsplash API
 function HeroPhoto({ query, destination }) {
-  const [url, setUrl]       = useState("");
-  const [credit, setCredit] = useState(null);
-  const [loaded, setLoaded] = useState(false);
+  const [url, setUrl]         = useState("");
+  const [credit, setCredit]   = useState(null);
+  const [loaded, setLoaded]   = useState(false);
   const [errored, setErrored] = useState(false);
 
   useEffect(() => {
     if (!UNSPLASH_KEY) return;
-    const q = encodeURIComponent(query || destination);
-    fetch("https://api.unsplash.com/photos/random?query="+q+"&orientation=landscape&client_id="+UNSPLASH_KEY)
+    fetch("https://api.unsplash.com/photos/random?query="+encodeURIComponent(query||destination)+"&orientation=landscape&client_id="+UNSPLASH_KEY)
       .then(r=>r.json())
-      .then(data=>{
-        if (data?.urls?.regular) {
-          setUrl(data.urls.regular);
-          setCredit({ name:data.user?.name, link:data.user?.links?.html });
-        }
-      }).catch(()=>setErrored(true));
+      .then(data=>{ if(data?.urls?.regular){ setUrl(data.urls.regular); setCredit({ name:data.user?.name, link:data.user?.links?.html }); } })
+      .catch(()=>setErrored(true));
   }, [query, destination]);
 
   if (!UNSPLASH_KEY || errored || !url) return null;
@@ -226,7 +234,6 @@ function PaywallBanner({ onSignIn, onPay, user }) {
   );
 }
 
-// Inspire Me modal — calls /api/inspire serverless function
 function InspireModal({ onClose, onFill }) {
   const [vibe, setVibe]         = useState("");
   const [duration, setDuration] = useState("");
@@ -240,18 +247,15 @@ function InspireModal({ onClose, onFill }) {
     setError(""); setLoading(true);
     try {
       const res = await fetch("/api/inspire", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
+        method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ vibe, duration, budget, origin }),
       });
       if (!res.ok) throw new Error("Server error");
-      const data = await res.json();
+      const data   = await res.json();
       const parsed = JSON.parse(data.raw.replace(/```json|```/g,"").trim());
       onFill({ ...parsed, origin: origin || "" });
       onClose();
-    } catch(e) {
-      setError("Couldn't generate suggestions. Try again.");
-    }
+    } catch(e) { setError("Couldn't generate suggestions. Try again."); }
     setLoading(false);
   }
 
@@ -261,7 +265,6 @@ function InspireModal({ onClose, onFill }) {
       <div style={{ background:"var(--paper)", border:"1px solid var(--sand)", borderRadius:"16px", padding:"1.75rem", width:"100%", maxWidth:"420px", animation:"slideUp 0.25s ease both", maxHeight:"90vh", overflowY:"auto" }}>
         <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.4rem", fontWeight:900, marginBottom:"0.3rem" }}>Inspire me ✨</div>
         <p style={{ fontSize:"0.82rem", color:"var(--warm-mid)", marginBottom:"1.25rem", lineHeight:1.5 }}>Tell us your vibe and we'll fill in the rest.</p>
-
         <div style={{ fontSize:"0.63rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.6rem" }}>What kind of trip?</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.5rem", marginBottom:"1.1rem" }}>
           {VIBES.map(v=>(
@@ -273,7 +276,6 @@ function InspireModal({ onClose, onFill }) {
             </button>
           ))}
         </div>
-
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.6rem", marginBottom:"0.75rem" }}>
           <div>
             <div style={{ fontSize:"0.63rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.4rem" }}>Duration (optional)</div>
@@ -290,14 +292,11 @@ function InspireModal({ onClose, onFill }) {
             </SelectInput>
           </div>
         </div>
-
         <div style={{ marginBottom:"1rem" }}>
           <div style={{ fontSize:"0.63rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.4rem" }}>Travelling from (optional)</div>
           <FocusInput type="text" placeholder="e.g. London, New York..." value={origin} onChange={e=>setOrigin(e.target.value)} style={{ fontSize:"0.88rem" }} />
         </div>
-
         {error && <div style={{ fontSize:"0.8rem", color:"var(--rust-dk)", background:"#fff1ed", padding:"0.5rem 0.75rem", borderRadius:"6px", marginBottom:"0.75rem" }}>{error}</div>}
-
         <div style={{ display:"flex", gap:"0.6rem" }}>
           <button onClick={onClose} style={{ flex:1, padding:"0.72rem", background:"transparent", border:"1.5px solid var(--sand)", borderRadius:"8px", fontSize:"0.88rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>Cancel</button>
           <button onClick={inspire} disabled={loading}
@@ -310,18 +309,17 @@ function InspireModal({ onClose, onFill }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser]                   = useState(null);
   const [authReady, setAuthReady]         = useState(false);
   const [showAuth, setShowAuth]           = useState(false);
   const [showHistory, setShowHistory]     = useState(false);
   const [showInspire, setShowInspire]     = useState(false);
+  const [showLanding, setShowLanding]     = useState(true);
   const [tripCount, setTripCount]         = useState(0);
   const [paymentStatus, setPaymentStatus] = useState("");
   const [paidTrips, setPaidTrips]         = useState(0);
 
-  // Form state
   const [destination, setDestination]       = useState("");
   const [origin, setOrigin]                 = useState("");
   const [dateFrom, setDateFrom]             = useState("");
@@ -330,23 +328,19 @@ export default function App() {
   const [travelStyle, setTravelStyle]       = useState("");
   const [interests, setInterests]           = useState([]);
   const [customInterest, setCustomInterest] = useState("");
-
-  // Result state
-  const [phase, setPhase]           = useState("form");
-  const [itinerary, setItinerary]   = useState(null);
-  const [rawText, setRawText]       = useState("");
-  const [photoQuery, setPhotoQuery] = useState("");
-  const [dayPhotos, setDayPhotos]   = useState({});
-  const dayRefs                     = useRef({});
-
+  const [phase, setPhase]                   = useState("form");
+  const [itinerary, setItinerary]           = useState(null);
+  const [rawText, setRawText]               = useState("");
+  const [photoQuery, setPhotoQuery]         = useState("");
+  const [dayPhotos, setDayPhotos]           = useState({});
   const [refineFeedback, setRefineFeedback] = useState("");
   const [refining, setRefining]             = useState(false);
   const [error, setError]                   = useState("");
   const [saving, setSaving]                 = useState(false);
   const [saved, setSaved]                   = useState(false);
   const requestInFlight                     = useRef(false);
+  const dayRefs                             = useRef({});
 
-  // Auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -358,9 +352,8 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Payment redirect
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params  = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
     if (payment === "success" || payment === "cancelled") {
       if (payment === "success") { setPaymentStatus("success"); setPaidTrips(n=>n+1); }
@@ -376,36 +369,25 @@ export default function App() {
           localStorage.removeItem("wayflo_form");
         }
       } catch(e) {}
+      setShowLanding(false);
       window.history.replaceState({}, "", "/");
     }
   }, []);
 
-  // Fetch per-day photos when itinerary is ready (every other day to save quota)
   useEffect(() => {
     if (!itinerary || !UNSPLASH_KEY) return;
     setDayPhotos({});
     itinerary.days.forEach((day, i) => {
-      if (i % 2 !== 0) return; // every other day
+      if (i % 2 !== 0) return;
       const q = day.locationName || day.title.replace(/^Day \d+\s*[-—]\s*/,"") + " " + destination;
       fetch("https://api.unsplash.com/photos/random?query="+encodeURIComponent(q)+"&orientation=landscape&client_id="+UNSPLASH_KEY)
         .then(r=>r.json())
-        .then(data=>{
-          if (data?.urls?.regular) {
-            setDayPhotos(prev=>({ ...prev, [i]:{ url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } } }));
-          }
-        }).catch(()=>{});
+        .then(data=>{ if(data?.urls?.regular){ setDayPhotos(prev=>({ ...prev, [i]:{ url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } } })); } })
+        .catch(()=>{});
     });
   }, [itinerary]);
 
-  function scrollToDay(dayIndex) {
-    const ref = dayRefs.current[dayIndex];
-    if (ref) ref.scrollIntoView({ behavior:"smooth", block:"center" });
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    setTripCount(0); setPaidTrips(0);
-  }
+  async function signOut() { await supabase.auth.signOut(); setTripCount(0); setPaidTrips(0); }
 
   const isBlocked = tripCount > 0 && !(user && paidTrips > 0);
 
@@ -434,9 +416,7 @@ export default function App() {
     if (fields.interests)   setInterests(fields.interests);
   }
 
-  function toggleInterest(item) {
-    setInterests(prev=>prev.includes(item)?prev.filter(i=>i!==item):[...prev,item]);
-  }
+  function toggleInterest(item) { setInterests(prev=>prev.includes(item)?prev.filter(i=>i!==item):[...prev,item]); }
   function addCustomInterest() {
     const val = customInterest.trim();
     if (val && !interests.includes(val)) setInterests(prev=>[...prev,val]);
@@ -446,14 +426,18 @@ export default function App() {
 
   function parseItinerary(text) {
     try { return JSON.parse(text.replace(/```json|```/g,"").trim()); }
-    catch { return { intro:"", photoQuery:"", days:[{ title:"Your Itinerary", content:text }] }; }
+    catch { return { intro:"", photoQuery:"", days:[{ title:"Your Itinerary", content:text, bookingLinks:[] }] }; }
   }
 
   async function callEndpoint(body) {
     const res = await fetch("/api/generate", {
       method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body),
     });
-    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(e.error||"Request failed"); }
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}));
+      if (res.status === 402) throw new Error("payment_required");
+      throw new Error(e.error||"Request failed");
+    }
     return (await res.json()).raw;
   }
 
@@ -464,15 +448,17 @@ export default function App() {
     requestInFlight.current = true;
     setError(""); setPhase("loading");
     try {
-      const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests });
+      const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, userId: user?.id || null, paidTrips });
       const parsed = parseItinerary(text);
       setRawText(text); setItinerary(parsed);
       setPhotoQuery(parsed.photoQuery||destination);
       setTripCount(c=>c+1);
       if (paidTrips>0) setPaidTrips(n=>n-1);
       setSaved(false); setPhase("result");
-    } catch(e) { setError(e.message||"Something went wrong."); setPhase("form"); }
-    finally { requestInFlight.current=false; }
+    } catch(e) {
+      if (e.message === "payment_required") { startCheckout(); setPhase("form"); }
+      else { setError(e.message||"Something went wrong."); setPhase("form"); }
+    } finally { requestInFlight.current=false; }
   }
 
   async function refine() {
@@ -481,7 +467,7 @@ export default function App() {
     requestInFlight.current = true;
     setRefining(true); setError("");
     try {
-      const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, refineFeedback, previousItinerary:rawText });
+      const text   = await callEndpoint({ destination, origin, dateFrom, dateTo, budget, travelStyle, interests, refineFeedback, previousItinerary:rawText, userId:user?.id||null, paidTrips });
       const parsed = parseItinerary(text);
       setRawText(text); setItinerary(parsed);
       setPhotoQuery(parsed.photoQuery||destination);
@@ -507,276 +493,305 @@ export default function App() {
 
   if (!authReady) return null;
 
+  // ── HEADER (shown on all non-landing views) ───────────────────────────────
+  const header = !showLanding && (
+    <header style={{ borderBottom:"1px solid var(--sand)", background:"rgba(245,240,232,0.92)", backdropFilter:"blur(8px)", position:"sticky", top:0, zIndex:100 }}>
+      <div style={{ maxWidth:700, margin:"0 auto", padding:"0 1.5rem", height:"64px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ display:"flex", flexDirection:"column", cursor:"pointer", lineHeight:1 }}
+          onClick={()=>{ setShowHistory(false); setShowLanding(true); }}>
+          <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.45rem", fontWeight:900, color:"var(--rust)" }}>Wayflo</span>
+          <span style={{ fontSize:"0.58rem", letterSpacing:"0.13em", textTransform:"uppercase", color:"var(--warm-mid)", marginTop:"1px" }}>Budget travel planner</span>
+        </div>
+        <nav style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
+          {phase==="result" && !showHistory && (
+            <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); }}
+              style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
+              ← New trip
+            </button>
+          )}
+          {user && (
+            <button onClick={()=>setShowHistory(h=>!h)}
+              style={{ background:showHistory?"var(--rust)":"none", color:showHistory?"#fff":"var(--warm-mid)", border:"1.5px solid", borderColor:showHistory?"var(--rust)":"var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap", transition:"all 0.15s" }}>
+              {showHistory?"← Back":"My trips"}
+            </button>
+          )}
+          {user ? (
+            <>
+              <div style={{ width:1, height:20, background:"var(--sand)" }} />
+              <span style={{ fontSize:"0.73rem", color:"var(--warm-mid)", maxWidth:130, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</span>
+              <button onClick={signOut}
+                style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <button onClick={()=>setShowAuth(true)}
+              style={{ background:"var(--rust)", border:"none", borderRadius:"6px", padding:"0.42rem 1rem", fontSize:"0.78rem", cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", fontWeight:500 }}>
+              Sign in
+            </button>
+          )}
+        </nav>
+      </div>
+    </header>
+  );
+
+  // ── LANDING HEADER ────────────────────────────────────────────────────────
+  const landingHeader = showLanding && (
+    <header style={{ position:"absolute", top:0, left:0, right:0, zIndex:10, padding:"1.25rem 1.5rem", display:"flex", alignItems:"center", justifyContent:"space-between", maxWidth:"100%" }}>
+      <div style={{ display:"flex", flexDirection:"column", lineHeight:1 }}>
+        <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.45rem", fontWeight:900, color:"var(--rust)" }}>Wayflo</span>
+        <span style={{ fontSize:"0.58rem", letterSpacing:"0.13em", textTransform:"uppercase", color:"var(--warm-mid)", marginTop:"1px" }}>Budget travel planner</span>
+      </div>
+      <div style={{ display:"flex", gap:"0.5rem", alignItems:"center" }}>
+        {user ? (
+          <>
+            <button onClick={()=>{ setShowLanding(false); setShowHistory(true); }}
+              style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
+              My trips
+            </button>
+            <button onClick={signOut}
+              style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
+              Sign out
+            </button>
+          </>
+        ) : (
+          <button onClick={()=>setShowAuth(true)}
+            style={{ background:"var(--rust)", border:"none", borderRadius:"6px", padding:"0.42rem 1rem", fontSize:"0.78rem", cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", fontWeight:500 }}>
+            Sign in
+          </button>
+        )}
+      </div>
+    </header>
+  );
+
   return (
     <>
       <style>{FONT_INJECT}</style>
       {showAuth    && <Auth onClose={()=>setShowAuth(false)} />}
       {showInspire && <InspireModal onClose={()=>setShowInspire(false)} onFill={fillFromInspire} />}
 
-      {/* HEADER */}
-      <header style={{ borderBottom:"1px solid var(--sand)", background:"rgba(245,240,232,0.92)", backdropFilter:"blur(8px)", position:"sticky", top:0, zIndex:100 }}>
-        <div style={{ maxWidth:720, margin:"0 auto", padding:"0 1.25rem", height:"60px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ display:"flex", flexDirection:"column", cursor:"pointer", lineHeight:1 }}
-            onClick={()=>{ setShowHistory(false); }}>
-            <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.45rem", fontWeight:900, color:"var(--rust)" }}>Wayflo</span>
-            <span style={{ fontSize:"0.58rem", letterSpacing:"0.13em", textTransform:"uppercase", color:"var(--warm-mid)", marginTop:"1px" }}>Budget travel planner</span>
-          </div>
-          <nav style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
-            {phase==="result" && !showHistory && (
-              <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); }}
-                style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
-                ← New trip
-              </button>
-            )}
-            {user && (
-              <button onClick={()=>setShowHistory(h=>!h)}
-                style={{ background:showHistory?"var(--rust)":"none", color:showHistory?"#fff":"var(--warm-mid)", border:"1.5px solid", borderColor:showHistory?"var(--rust)":"var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap", transition:"all 0.15s" }}>
-                {showHistory?"← Back":"My trips"}
-              </button>
-            )}
-            {user ? (
-              <>
-                <div style={{ width:1, height:20, background:"var(--sand)" }} />
-                <span style={{ fontSize:"0.73rem", color:"var(--warm-mid)", maxWidth:130, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.email}</span>
-                <button onClick={signOut}
-                  style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <button onClick={()=>setShowAuth(true)}
-                style={{ background:"var(--rust)", border:"none", borderRadius:"6px", padding:"0.42rem 1rem", fontSize:"0.78rem", cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", fontWeight:500 }}>
-                Sign in
-              </button>
-            )}
-          </nav>
+      {/* Landing page */}
+      {showLanding && (
+        <div style={{ position:"relative" }}>
+          {landingHeader}
+          <LandingPage onGetStarted={()=>setShowLanding(false)} />
+          <footer style={{ textAlign:"center", padding:"1.5rem 1rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
+            WAYFLO · First trip free · $5/trip after that
+          </footer>
         </div>
-      </header>
+      )}
 
-      <main style={{ maxWidth:680, margin:"0 auto", padding:"1.5rem 1.25rem" }}>
-
-        {/* History view — shown/hidden without unmounting result */}
-        <div style={{ display: showHistory ? "block" : "none" }}>
-          <TripHistory onClose={()=>setShowHistory(false)} />
-        </div>
-
-        {/* Main app — hidden when history is shown but NOT unmounted */}
-        <div style={{ display: showHistory ? "none" : "block" }}>
-
-          {/* Status banners */}
-          {!user && tripCount===0 && phase==="form" && (
-            <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.85rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1.1rem" }}>
-              ✦ First itinerary is free — no account needed
+      {/* App */}
+      {!showLanding && (
+        <>
+          {header}
+          <main style={{ maxWidth:700, margin:"0 auto", padding:"1.5rem 1.5rem" }}>
+            <div style={{ display: showHistory ? "block" : "none" }}>
+              <TripHistory onClose={()=>setShowHistory(false)} />
             </div>
-          )}
-          {paymentStatus==="success" && phase==="form" && (
-            <div style={{ background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--green)", marginBottom:"1rem", fontWeight:500 }}>
-              ✓ Payment successful — your trip is ready to generate!
-            </div>
-          )}
-          {paymentStatus==="cancelled" && phase==="form" && (
-            <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>
-              Payment cancelled — no charge was made.
-            </div>
-          )}
+            <div style={{ display: showHistory ? "none" : "block" }}>
 
-          {/* FORM */}
-          {phase==="form" && (
-            <div style={{ animation:"fadeUp 0.4s ease both" }}>
-              <div style={{ marginBottom:"1.75rem" }}>
-                <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.8rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.5rem", color:"var(--ink)" }}>
-                  Where are you<br /><span style={{ color:"var(--rust)" }}>running off to?</span>
-                </h1>
-                <p style={{ fontSize:"0.87rem", color:"var(--warm-mid)", lineHeight:1.6 }}>Five questions. One perfect backpacker itinerary.</p>
-              </div>
+              {!user && tripCount===0 && phase==="form" && (
+                <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.85rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1.1rem" }}>
+                  ✦ First itinerary is free — no account needed
+                </div>
+              )}
+              {paymentStatus==="success" && phase==="form" && (
+                <div style={{ background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--green)", marginBottom:"1rem", fontWeight:500 }}>
+                  ✓ Payment successful — your trip is ready to generate!
+                </div>
+              )}
+              {paymentStatus==="cancelled" && phase==="form" && (
+                <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>
+                  Payment cancelled — no charge was made.
+                </div>
+              )}
 
-              <div style={{ display:"flex", alignItems:"center", gap:"1rem", marginBottom:"1.5rem" }}>
-                <div style={{ flex:1, height:1, background:"var(--sand)" }} />
-                <button onClick={()=>setShowInspire(true)}
-                  style={{ padding:"0.5rem 1.1rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"999px", fontSize:"0.82rem", cursor:"pointer", color:"var(--ink-soft)", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", gap:"0.4rem", whiteSpace:"nowrap", transition:"border-color 0.15s, box-shadow 0.15s", fontWeight:500 }}
-                  onMouseOver={e=>{ e.currentTarget.style.borderColor="var(--rust)"; e.currentTarget.style.boxShadow="0 2px 8px rgba(196,98,45,0.15)"; }}
-                  onMouseOut={e=>{ e.currentTarget.style.borderColor="var(--sand)"; e.currentTarget.style.boxShadow="none"; }}>
-                  ✨ Inspire me
-                </button>
-                <div style={{ flex:1, height:1, background:"var(--sand)" }} />
-              </div>
+              {/* FORM */}
+              {phase==="form" && (
+                <div style={{ animation:"fadeUp 0.4s ease both" }}>
+                  <div style={{ marginBottom:"1.75rem" }}>
+                    <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.8rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.5rem", color:"var(--ink)" }}>
+                      Where are you<br /><span style={{ color:"var(--rust)" }}>running off to?</span>
+                    </h1>
+                    <p style={{ fontSize:"0.87rem", color:"var(--warm-mid)", lineHeight:1.6 }}>Five questions. One perfect backpacker itinerary.</p>
+                  </div>
 
-              {isBlocked && <PaywallBanner onSignIn={()=>setShowAuth(true)} onPay={startCheckout} user={user} />}
+                  <div style={{ display:"flex", alignItems:"center", gap:"1rem", marginBottom:"1.5rem" }}>
+                    <div style={{ flex:1, height:1, background:"var(--sand)" }} />
+                    <button onClick={()=>setShowInspire(true)}
+                      style={{ padding:"0.5rem 1.1rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"999px", fontSize:"0.82rem", cursor:"pointer", color:"var(--ink-soft)", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", gap:"0.4rem", whiteSpace:"nowrap", transition:"border-color 0.15s, box-shadow 0.15s", fontWeight:500 }}
+                      onMouseOver={e=>{ e.currentTarget.style.borderColor="var(--rust)"; e.currentTarget.style.boxShadow="0 2px 8px rgba(196,98,45,0.15)"; }}
+                      onMouseOut={e=>{ e.currentTarget.style.borderColor="var(--sand)"; e.currentTarget.style.boxShadow="none"; }}>
+                      ✨ Inspire me
+                    </button>
+                    <div style={{ flex:1, height:1, background:"var(--sand)" }} />
+                  </div>
 
-              <FieldCard number={1} icon="📍" label="Destination" hint="City, country, or region"
-                action={<DiceBtn onClick={()=>{ if(budget||travelStyle||interests.length){ setShowInspire(true); } else { const p=["Bangkok, Thailand","Hanoi, Vietnam","Bali, Indonesia","Medellin, Colombia","Lisbon, Portugal","Budapest, Hungary","Marrakech, Morocco","Oaxaca, Mexico","Tbilisi, Georgia","Chiang Mai, Thailand","Split, Croatia","Sarajevo, Bosnia"]; setDestination(p[Math.floor(Math.random()*p.length)]); }}} title="Random destination" />}>
-                <FocusInput type="text" placeholder="e.g. Hanoi, Vietnam or Southeast Asia" value={destination} onChange={e=>setDestination(e.target.value)} />
-              </FieldCard>
+                  {isBlocked && <PaywallBanner onSignIn={()=>setShowAuth(true)} onPay={startCheckout} user={user} />}
 
-              <FieldCard number={2} icon="🛫" label="Travelling from" hint="Helps estimate your flight cost"
-                action={<DiceBtn onClick={()=>{ const o=["New York, USA","London, UK","Sydney, Australia","Toronto, Canada","Berlin, Germany","Sao Paulo, Brazil"]; setOrigin(o[Math.floor(Math.random()*o.length)]); }} title="Random origin" />}>
-                <div style={{ display:"flex", gap:"0.5rem", alignItems:"center" }}>
-                  <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} style={{ flex:1 }} />
-                  <button
-                    type="button"
-                    title="Use my current location"
-                    onClick={()=>{
-                      if (!navigator.geolocation) return;
-                      navigator.geolocation.getCurrentPosition(async pos => {
-                        const { latitude, longitude } = pos.coords;
-                        try {
-                          const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json");
-                          const d = await r.json();
-                          const city = d.address?.city || d.address?.town || d.address?.village || "";
-                          const country = d.address?.country || "";
-                          if (city) setOrigin(city + (country ? ", " + country : ""));
-                        } catch(e) {}
-                      }, () => {});
-                    }}
-                    style={{ padding:"0.65rem 0.75rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
-                    onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
-                    onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}
-                  >
-                    📍
+                  <FieldCard number={1} icon="📍" label="Destination" hint="City, country, or region"
+                    action={<DiceBtn onClick={()=>{ if(budget||travelStyle||interests.length){ setShowInspire(true); } else { const p=["Bangkok, Thailand","Hanoi, Vietnam","Bali, Indonesia","Medellin, Colombia","Lisbon, Portugal","Budapest, Hungary","Marrakech, Morocco","Oaxaca, Mexico","Tbilisi, Georgia","Chiang Mai, Thailand","Split, Croatia","Sarajevo, Bosnia"]; setDestination(p[Math.floor(Math.random()*p.length)]); }}} title="Random destination" />}>
+                    <FocusInput type="text" placeholder="e.g. Hanoi, Vietnam or Southeast Asia" value={destination} onChange={e=>setDestination(e.target.value)} />
+                  </FieldCard>
+
+                  <FieldCard number={2} icon="🛫" label="Travelling from" hint="Helps estimate travel costs from your starting point"
+                    action={<DiceBtn onClick={()=>{ const o=["New York, USA","London, UK","Sydney, Australia","Toronto, Canada","Berlin, Germany","Sao Paulo, Brazil"]; setOrigin(o[Math.floor(Math.random()*o.length)]); }} title="Random origin" />}>
+                    <div style={{ display:"flex", gap:"0.5rem", alignItems:"center" }}>
+                      <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} style={{ flex:1 }} />
+                      <button type="button" title="Use my current location"
+                        onClick={()=>{
+                          if (!navigator.geolocation) return;
+                          navigator.geolocation.getCurrentPosition(async pos => {
+                            try {
+                              const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+pos.coords.latitude+"&lon="+pos.coords.longitude+"&format=json");
+                              const d = await r.json();
+                              const city    = d.address?.city||d.address?.town||d.address?.village||"";
+                              const country = d.address?.country||"";
+                              if (city) setOrigin(city+(country?", "+country:""));
+                            } catch(e) {}
+                          }, ()=>{});
+                        }}
+                        style={{ padding:"0.65rem 0.75rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
+                        onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
+                        onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}>
+                        📍
+                      </button>
+                    </div>
+                  </FieldCard>
+
+                  <FieldCard number={3} icon="📅" label="Travel Dates" hint="When are you going?"
+                    action={<DiceBtn onClick={randomDatesSet} title="Random dates" />}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.65rem" }}>
+                      <div>
+                        <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>From</div>
+                        <FocusInput type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>To</div>
+                        <FocusInput type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+                      </div>
+                    </div>
+                  </FieldCard>
+
+                  <FieldCard number={4} icon="💰" label="Total Trip Budget" hint="Everything — flights, accommodation, food, activities"
+                    action={<DiceBtn onClick={()=>setBudget(BUDGETS[Math.floor(Math.random()*BUDGETS.length)])} title="Random budget" />}>
+                    <SelectInput value={budget} onChange={e=>setBudget(e.target.value)}>
+                      <option value="">Select a budget range</option>
+                      {BUDGETS.map(b=><option key={b}>{b}</option>)}
+                    </SelectInput>
+                  </FieldCard>
+
+                  <FieldCard number={5} icon="🧭" label="Travel Style" hint="How do you like to move through a place?"
+                    action={<DiceBtn onClick={()=>setTravelStyle(STYLES[Math.floor(Math.random()*STYLES.length)])} title="Random style" />}>
+                    <SelectInput
+                      value={STYLES.includes(travelStyle)||travelStyle===""?travelStyle:"__custom__"}
+                      onChange={e=>{ if(e.target.value==="__custom__") setTravelStyle("__custom__"); else setTravelStyle(e.target.value); }}>
+                      <option value="">Choose your style</option>
+                      {STYLES.map(s=><option key={s}>{s}</option>)}
+                      <option value="__custom__">Describe my own style...</option>
+                    </SelectInput>
+                    {travelStyle==="__custom__" && (
+                      <FocusInput as="textarea" rows={2}
+                        placeholder="e.g. I like getting lost in local neighbourhoods, avoiding tourist traps..."
+                        value="" onChange={e=>setTravelStyle(e.target.value)}
+                        style={{ marginTop:"0.5rem", resize:"none", fontSize:"0.88rem", lineHeight:1.5 }} />
+                    )}
+                  </FieldCard>
+
+                  <FieldCard number={6} icon="❤️" label="Interests" hint="What makes a trip worth it for you?">
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:"0.45rem", marginBottom:"0.65rem" }}>
+                      {INTERESTS_OPTIONS.map(item=><Chip key={item} label={item} selected={interests.includes(item)} onClick={()=>toggleInterest(item)} />)}
+                      {interests.filter(i=>!INTERESTS_OPTIONS.includes(i)).map(i=><Chip key={i} label={i} selected={true} onClick={()=>toggleInterest(i)} />)}
+                    </div>
+                    <div style={{ display:"flex", gap:"0.5rem" }}>
+                      <FocusInput type="text" placeholder="Add your own..." value={customInterest}
+                        onChange={e=>setCustomInterest(e.target.value)}
+                        onKeyDown={e=>e.key==="Enter"&&addCustomInterest()} style={{ flex:1 }} />
+                      <button type="button" onClick={addCustomInterest} disabled={!customInterest.trim()}
+                        style={{ padding:"0 1rem", background:customInterest.trim()?"var(--rust)":"var(--sand)", border:"none", borderRadius:"8px", color:customInterest.trim()?"#fff":"var(--warm-mid)", fontSize:"0.85rem", cursor:customInterest.trim()?"pointer":"not-allowed", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
+                        + Add
+                      </button>
+                    </div>
+                  </FieldCard>
+
+                  {error && <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>{error}</div>}
+
+                  <button onClick={generate} disabled={busy}
+                    style={{ width:"100%", padding:"0.9rem 1.5rem", background:busy?"var(--warm-mid)":"var(--rust)", border:"none", borderRadius:"10px", fontSize:"1rem", fontWeight:600, cursor:busy?"not-allowed":"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", animation:busy?"none":"pulse-ring 2.5s infinite", transition:"background 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.6rem" }}>
+                    {busy ? <><Spinner size={16} />Generating...</> : "Generate my itinerary →"}
                   </button>
                 </div>
-              </FieldCard>
+              )}
 
-              <FieldCard number={3} icon="📅" label="Travel Dates" hint="When are you going?"
-                action={<DiceBtn onClick={randomDatesSet} title="Random dates" />}>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.65rem" }}>
-                  <div>
-                    <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>From</div>
-                    <FocusInput type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>To</div>
-                    <FocusInput type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+              {/* LOADING */}
+              {phase==="loading" && (
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"65vh", gap:"1.2rem", animation:"fadeIn 0.3s ease both" }}>
+                  <div style={{ width:44, height:44, borderRadius:"50%", border:"3px solid var(--sand)", borderTopColor:"var(--rust)", animation:"spin 0.8s linear infinite" }} />
+                  <div style={{ textAlign:"center" }}>
+                    <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.35rem", fontWeight:700, marginBottom:"0.3rem" }}>Plotting your adventure...</div>
+                    <div style={{ fontSize:"0.82rem", color:"var(--warm-mid)" }}>Finding hidden gems, local spots, and the best routes.</div>
                   </div>
                 </div>
-              </FieldCard>
+              )}
 
-              <FieldCard number={4} icon="💰" label="Total Trip Budget" hint="Everything — flights, accommodation, food, activities"
-                action={<DiceBtn onClick={()=>setBudget(BUDGETS[Math.floor(Math.random()*BUDGETS.length)])} title="Random budget" />}>
-                <SelectInput value={budget} onChange={e=>setBudget(e.target.value)}>
-                  <option value="">Select a budget range</option>
-                  {BUDGETS.map(b=><option key={b}>{b}</option>)}
-                </SelectInput>
-              </FieldCard>
+              {/* RESULT */}
+              {phase==="result" && itinerary && (
+                <div style={{ animation:"fadeUp 0.4s ease both" }}>
+                  <HeroPhoto query={photoQuery} destination={destination} />
+                  <div style={{ marginBottom:"1.25rem" }}>
+                    <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.35rem" }}>Your itinerary</div>
+                    <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.4rem,5vw,2rem)", fontWeight:900, color:"var(--ink)", lineHeight:1.15, marginBottom:"0.65rem" }}>{destination}</h2>
+                    {itinerary.intro && <p style={{ fontSize:"0.88rem", lineHeight:1.7, color:"var(--ink-soft)" }}>{itinerary.intro}</p>}
+                    <div style={{ display:"flex", gap:"0.45rem", flexWrap:"wrap", marginTop:"0.8rem" }}>
+                      {[origin&&"From "+origin, dateFrom&&dateFrom+" to "+dateTo, budget, travelStyle].filter(Boolean).map(tag=>(
+                        <span key={tag} style={{ padding:"0.22rem 0.65rem", background:"var(--sand)", borderRadius:"999px", fontSize:"0.72rem", color:"var(--ink)", fontWeight:500 }}>{tag}</span>
+                      ))}
+                    </div>
+                  </div>
 
-              <FieldCard number={5} icon="🧭" label="Travel Style" hint="How do you like to move through a place?"
-                action={<DiceBtn onClick={()=>setTravelStyle(STYLES[Math.floor(Math.random()*STYLES.length)])} title="Random style" />}>
-                <SelectInput
-                  value={STYLES.includes(travelStyle) || travelStyle==="" ? travelStyle : "__custom__"}
-                  onChange={e=>{ if(e.target.value==="__custom__") setTravelStyle("__custom__"); else setTravelStyle(e.target.value); }}>
-                  <option value="">Choose your style</option>
-                  {STYLES.map(s=><option key={s}>{s}</option>)}
-                  <option value="__custom__">Describe my own style...</option>
-                </SelectInput>
-                {travelStyle === "__custom__" && (
-                  <FocusInput
-                    as="textarea"
-                    rows={2}
-                    placeholder="e.g. I like getting lost in local neighbourhoods, avoiding tourist traps..."
-                    value={""}
-                    onChange={e=>setTravelStyle(e.target.value)}
-                    style={{ marginTop:"0.5rem", resize:"none", fontSize:"0.88rem", lineHeight:1.5 }}
-                  />
-                )}
-              </FieldCard>
+                  <div style={{ height:1, background:"var(--sand)", marginBottom:"1.25rem" }} />
 
-              <FieldCard number={6} icon="❤️" label="Interests" hint="What makes a trip worth it for you?">
-                <div style={{ display:"flex", flexWrap:"wrap", gap:"0.45rem", marginBottom:"0.65rem" }}>
-                  {INTERESTS_OPTIONS.map(item=><Chip key={item} label={item} selected={interests.includes(item)} onClick={()=>toggleInterest(item)} />)}
-                  {interests.filter(i=>!INTERESTS_OPTIONS.includes(i)).map(i=><Chip key={i} label={i} selected={true} onClick={()=>toggleInterest(i)} />)}
-                </div>
-                <div style={{ display:"flex", gap:"0.5rem" }}>
-                  <FocusInput type="text" placeholder="Add your own..." value={customInterest}
-                    onChange={e=>setCustomInterest(e.target.value)}
-                    onKeyDown={e=>e.key==="Enter"&&addCustomInterest()} style={{ flex:1 }} />
-                  <button type="button" onClick={addCustomInterest} disabled={!customInterest.trim()}
-                    style={{ padding:"0 1rem", background:customInterest.trim()?"var(--rust)":"var(--sand)", border:"none", borderRadius:"8px", color:customInterest.trim()?"#fff":"var(--warm-mid)", fontSize:"0.85rem", cursor:customInterest.trim()?"pointer":"not-allowed", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap", transition:"background 0.15s" }}>
-                    + Add
+                  <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"8px", padding:"0.6rem 1rem", fontSize:"0.75rem", color:"var(--warm-mid)", marginBottom:"1.25rem", display:"flex", gap:"0.5rem", alignItems:"flex-start", lineHeight:1.5 }}>
+                    <span style={{ flexShrink:0 }}>⚠️</span>
+                    <span>Transport times and prices are estimates — book ahead for lower fares, expect higher costs last-minute. Always verify opening hours and availability before you go.</span>
+                  </div>
+
+                  <TripMap days={itinerary.days} dayPhotos={dayPhotos} />
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>
+                    {itinerary.days.map((day,i)=>(
+                      <DayCard key={i} day={day} index={i} photo={dayPhotos[i]} dayRef={el=>{ dayRefs.current[i]=el; }} />
+                    ))}
+                  </div>
+
+                  <button onClick={saveTrip} disabled={saving||saved}
+                    style={{ width:"100%", padding:"0.82rem", background:saved?"var(--green)":saving?"var(--warm-mid)":"var(--ink)", border:"none", borderRadius:"8px", color:"var(--paper)", fontSize:"0.92rem", fontWeight:500, cursor:saved||saving?"default":"pointer", fontFamily:"'DM Sans', sans-serif", marginBottom:"0.85rem", transition:"background 0.3s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.5rem" }}>
+                    {saved?"✓ Trip saved":saving?<><Spinner />Saving...</>:"Save this trip"}
                   </button>
+
+                  <div style={{ background:"var(--card-bg)", border:"1px solid var(--sand)", borderRadius:"10px", padding:"1.15rem" }}>
+                    <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.45rem" }}>Refine</div>
+                    <p style={{ fontSize:"0.8rem", color:"var(--warm-mid)", marginBottom:"0.8rem", lineHeight:1.5 }}>Not quite right? Tell us what to tweak.</p>
+                    <FocusInput as="textarea" placeholder="e.g. More beach time, skip museums, I hate early mornings..."
+                      value={refineFeedback} onChange={e=>setRefineFeedback(e.target.value)}
+                      disabled={refining} rows={3}
+                      style={{ resize:"vertical", marginBottom:"0.65rem", lineHeight:1.6, fontSize:"0.86rem", opacity:refining?0.6:1 }} />
+                    {error && <div style={{ fontSize:"0.78rem", color:"var(--rust-dk)", marginBottom:"0.5rem" }}>{error}</div>}
+                    <button onClick={refine} disabled={refining||!refineFeedback.trim()}
+                      style={{ width:"100%", padding:"0.72rem", background:(refining||!refineFeedback.trim())?"var(--sand)":"var(--rust)", border:"none", borderRadius:"7px", color:(refining||!refineFeedback.trim())?"var(--warm-mid)":"#fff", fontSize:"0.88rem", fontWeight:500, cursor:(refining||!refineFeedback.trim())?"not-allowed":"pointer", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.5rem" }}>
+                      {refining?<><Spinner />Regenerating...</>:"↻ Regenerate itinerary"}
+                    </button>
+                  </div>
                 </div>
-              </FieldCard>
-
-              {error && <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>{error}</div>}
-
-              <button onClick={generate} disabled={busy}
-                style={{ width:"100%", padding:"0.9rem 1.5rem", background:busy?"var(--warm-mid)":"var(--rust)", border:"none", borderRadius:"10px", fontSize:"1rem", fontWeight:600, cursor:busy?"not-allowed":"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", animation:busy?"none":"pulse-ring 2.5s infinite", transition:"background 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.6rem" }}>
-                {busy ? <><Spinner size={16} />Generating...</> : "Generate my itinerary →"}
-              </button>
+              )}
             </div>
-          )}
-
-          {/* LOADING */}
-          {phase==="loading" && (
-            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"65vh", gap:"1.2rem", animation:"fadeIn 0.3s ease both" }}>
-              <div style={{ width:44, height:44, borderRadius:"50%", border:"3px solid var(--sand)", borderTopColor:"var(--rust)", animation:"spin 0.8s linear infinite" }} />
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.35rem", fontWeight:700, marginBottom:"0.3rem" }}>Plotting your adventure...</div>
-                <div style={{ fontSize:"0.82rem", color:"var(--warm-mid)" }}>Finding hidden gems, local spots, and the best routes.</div>
-              </div>
-            </div>
-          )}
-
-          {/* RESULT */}
-          {phase==="result" && itinerary && (
-            <div style={{ animation:"fadeUp 0.4s ease both" }}>
-              <HeroPhoto query={photoQuery} destination={destination} />
-
-              <div style={{ marginBottom:"1.25rem" }}>
-                <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.35rem" }}>Your itinerary</div>
-                <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.4rem,5vw,2rem)", fontWeight:900, color:"var(--ink)", lineHeight:1.15, marginBottom:"0.65rem" }}>{destination}</h2>
-                {itinerary.intro && <p style={{ fontSize:"0.88rem", lineHeight:1.7, color:"var(--ink-soft)" }}>{itinerary.intro}</p>}
-                <div style={{ display:"flex", gap:"0.45rem", flexWrap:"wrap", marginTop:"0.8rem" }}>
-                  {[origin&&"From "+origin, dateFrom&&dateFrom+" to "+dateTo, budget, travelStyle].filter(Boolean).map(tag=>(
-                    <span key={tag} style={{ padding:"0.22rem 0.65rem", background:"var(--sand)", borderRadius:"999px", fontSize:"0.72rem", color:"var(--ink)", fontWeight:500 }}>{tag}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ height:1, background:"var(--sand)", marginBottom:"1.25rem" }} />
-
-              <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"8px", padding:"0.6rem 1rem", fontSize:"0.75rem", color:"var(--warm-mid)", marginBottom:"1.25rem", display:"flex", gap:"0.5rem", alignItems:"flex-start", lineHeight:1.5 }}>
-                <span style={{ flexShrink:0 }}>⚠️</span>
-                <span>Transport times and prices are estimates — book ahead for lower fares, expect higher costs last-minute. Always verify opening hours and availability before you go.</span>
-              </div>
-
-              <TripMap days={itinerary.days} />
-
-              <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>
-                {itinerary.days.map((day,i)=>(
-                  <DayCard
-                    key={i} day={day} index={i}
-                    photo={dayPhotos[i]}
-                    dayRef={el=>{ dayRefs.current[i]=el; }}
-                  />
-                ))}
-              </div>
-
-              <button onClick={saveTrip} disabled={saving||saved}
-                style={{ width:"100%", padding:"0.82rem", background:saved?"var(--green)":saving?"var(--warm-mid)":"var(--ink)", border:"none", borderRadius:"8px", color:"var(--paper)", fontSize:"0.92rem", fontWeight:500, cursor:saved||saving?"default":"pointer", fontFamily:"'DM Sans', sans-serif", marginBottom:"0.85rem", transition:"background 0.3s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.5rem" }}>
-                {saved?"✓ Trip saved":saving?<><Spinner />Saving...</>:"Save this trip"}
-              </button>
-
-              <div style={{ background:"var(--card-bg)", border:"1px solid var(--sand)", borderRadius:"10px", padding:"1.15rem" }}>
-                <div style={{ fontSize:"0.62rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.45rem" }}>Refine</div>
-                <p style={{ fontSize:"0.8rem", color:"var(--warm-mid)", marginBottom:"0.8rem", lineHeight:1.5 }}>Not quite right? Tell us what to tweak.</p>
-                <FocusInput as="textarea" placeholder="e.g. More beach time, skip museums, I hate early mornings..."
-                  value={refineFeedback} onChange={e=>setRefineFeedback(e.target.value)}
-                  disabled={refining} rows={3}
-                  style={{ resize:"vertical", marginBottom:"0.65rem", lineHeight:1.6, fontSize:"0.86rem", opacity:refining?0.6:1 }} />
-                {error && <div style={{ fontSize:"0.78rem", color:"var(--rust-dk)", marginBottom:"0.5rem" }}>{error}</div>}
-                <button onClick={refine} disabled={refining||!refineFeedback.trim()}
-                  style={{ width:"100%", padding:"0.72rem", background:(refining||!refineFeedback.trim())?"var(--sand)":"var(--rust)", border:"none", borderRadius:"7px", color:(refining||!refineFeedback.trim())?"var(--warm-mid)":"#fff", fontSize:"0.88rem", fontWeight:500, cursor:(refining||!refineFeedback.trim())?"not-allowed":"pointer", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.5rem", transition:"background 0.2s" }}>
-                  {refining?<><Spinner />Regenerating...</>:"↻ Regenerate itinerary"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-
-      <footer style={{ textAlign:"center", padding:"2rem 1rem 1.5rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
-        WAYFLO · First trip free · $5/trip after that
-      </footer>
+          </main>
+          <footer style={{ textAlign:"center", padding:"2rem 1rem 1.5rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
+            WAYFLO · First trip free · $5/trip after that
+          </footer>
+        </>
+      )}
     </>
   );
 }

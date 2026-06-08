@@ -172,7 +172,20 @@ export default function TripMap({ days }) {
 
       {/* Inline day panel */}
       {activeDayData && (
-        <div style={{ background:"var(--white)", border:"1px solid var(--rust)", borderTop:"2px solid var(--rust)", borderRadius:"0 0 12px 12px", padding:"0.9rem 1.1rem", animation:"fadeUp 0.2s ease both" }}>
+        <div style={{ background:"var(--white)", border:"1px solid var(--rust)", borderTop:"2px solid var(--rust)", borderRadius:"0 0 12px 12px", overflow:"hidden", animation:"fadeUp 0.2s ease both" }}>
+          {dayPhotos[activePin] && (
+            <div style={{ width:"100%", aspectRatio:"16/6", overflow:"hidden", position:"relative" }}>
+              <img src={dayPhotos[activePin].url} alt={activeDayData.title}
+                style={{ width:"100%", height:"100%", objectFit:"cover", objectPosition:"center center" }} />
+              {dayPhotos[activePin].credit && (
+                <a href={dayPhotos[activePin].credit.link+"?utm_source=wayflo&utm_medium=referral"} target="_blank" rel="noopener noreferrer"
+                  style={{ position:"absolute", bottom:"4px", right:"8px", fontSize:"0.58rem", color:"rgba(255,255,255,0.8)", textDecoration:"none" }}>
+                  {dayPhotos[activePin].credit.name} / Unsplash
+                </a>
+              )}
+            </div>
+          )}
+          <div style={{ padding:"0.9rem 1.1rem" }}>
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:"0.5rem" }}>
             <div style={{ display:"flex", alignItems:"baseline", gap:"0.5rem" }}>
               <span style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.1rem", fontWeight:900, color:"var(--rust)" }}>
@@ -213,6 +226,7 @@ export default function TripMap({ days }) {
               </li>
             ))}
           </ul>
+          </div>
         </div>
       )}
 

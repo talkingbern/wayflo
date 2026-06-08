@@ -4,13 +4,39 @@ export const config = { runtime: "nodejs" };
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey      = process.env.ANTHROPIC_API_KEY;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   if (!apiKey) return res.status(500).json({ error: "Missing API key." });
 
-  const { destination, dateFrom, dateTo, budget, origin, travelStyle, interests, refineFeedback, previousItinerary } = req.body ?? {};
+  const { destination, dateFrom, dateTo, budget, origin, travelStyle, interests, refineFeedback, previousItinerary, userId } = req.body ?? {};
   if (!destination || !dateFrom || !dateTo || !budget || !travelStyle) return res.status(400).json({ error: "Missing required fields." });
 
-  const tripDays = Math.round((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
+  // ── Trip limit enforcement ─────────────────────────────────────────────────
+  // Guests (no userId): allow only first call — tracked client-side, enforced loosely
+  // Logged-in users: check profiles table. Must have paid (paidTrips > 0) or be on first trip.
+  if (userId && supabaseUrl && supabaseKey) {
+    const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated`, {
+      headers: {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      }
+    });
+    const profiles = await profileRes.json();
+    const profile  = profiles?.[0];
+
+    if (profile && profile.trips_generated >= 1) {
+      // Check if they have a paid trip available — passed from client
+      const { paidTrips } = req.body;
+      if (!paidTrips || paidTrips < 1) {
+        return res.status(402).json({ error: "payment_required" });
+      }
+    }
+  }
+
+  const tripDays     = Math.round((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
   const isRefinement = Boolean(refineFeedback && previousItinerary);
 
   const systemPrompt = `You are Wayflo, a travel planner for budget backpackers aged 18-25.
@@ -23,7 +49,7 @@ CRITICAL RULES FOR TRANSPORT ESTIMATES:
 - Always give time RANGES not exact times. Format: "allow X-Xhrs depending on route/stops"
 - The lower end should reflect best-case advance booking. The upper end should reflect average/walk-up.
 - Never imply one price is what the user will pay. Prices vary by season and booking time.
-- For flights specifically: note that prices vary hugely and to set a Google Flights alert.`;
+- For flights: note that prices vary hugely and to set a Google Flights alert.`;
 
   const tripContext = `Destination: ${destination}
 ${origin ? "Travelling from: " + origin : ""}
@@ -37,39 +63,56 @@ Interests: ${Array.isArray(interests) ? interests.join(", ") : interests || "gen
 ${tripContext}
 
 Include:
-- A Day 0 "Getting There" entry with honest price/time ranges for the journey
+- A Day 0 "Getting There" entry with honest price/time ranges
 - One entry per full day (Day 1 through Day ${tripDays})
 - A final "Getting Home" entry
 
 Each day: 3-5 bullet points. Real place names. Scannable, not an essay.
 
-For each day provide the main coordinate and location. For Day 0 and Getting Home also provide transportType.
+For Day 0 and Getting Home, include a "bookingLinks" array with 1-3 relevant booking links.
+Each booking link should be a deep link prefilled with the route where possible.
+
+Use these link formats:
+- Flights: https://www.google.com/travel/flights/search?tfs=... or just https://www.skyscanner.com
+- European trains: https://www.trainline.com/search/[origin]/[destination] 
+- Flixbus: https://global.flixbus.com
+- Hostelworld for accommodation: https://www.hostelworld.com/search?search_keywords=[city]&date_from=[YYYY-MM-DD]&date_to=[YYYY-MM-DD]
+- Booking.com: https://www.booking.com/searchresults.html?ss=[city]&checkin=[YYYY-MM-DD]&checkout=[YYYY-MM-DD]
 
 JSON format (no markdown fences):
 {
   "intro": "2 punchy sentences.",
-  "photoQuery": "short Unsplash search query e.g. 'Ljubljana Slovenia old town'",
+  "photoQuery": "short Unsplash search query",
   "days": [
     {
       "title": "Day 0 — Getting There",
-      "content": "bullet\nbullet\nbullet",
+      "content": "bullet\\nbullet\\nbullet",
       "lat": 46.0569,
       "lng": 14.5058,
       "locationName": "Ljubljana, Slovenia",
-      "transportType": "train"
+      "transportType": "train",
+      "bookingLinks": [
+        { "label": "Book train on Trainline", "url": "https://www.trainline.com" },
+        { "label": "Find hostels in Ljubljana", "url": "https://www.hostelworld.com/search?search_keywords=Ljubljana&date_from=2026-08-01&date_to=2026-08-07" }
+      ]
+    },
+    {
+      "title": "Day 1 — Title",
+      "content": "bullet\\nbullet\\nbullet",
+      "lat": 46.0569,
+      "lng": 14.5058,
+      "locationName": "Ljubljana Old Town",
+      "bookingLinks": []
     }
   ]
 }`;
 
   const refinePrompt = `Update this itinerary based on feedback: ${refineFeedback}
 
-Original trip:
-${tripContext}
+Original trip: ${tripContext}
+Previous itinerary: ${previousItinerary}
 
-Previous itinerary:
-${previousItinerary}
-
-Return only the updated JSON in the same format with lat, lng, locationName and transportType per day. No markdown fences.`;
+Return only the updated JSON in the same format with bookingLinks per day. No markdown fences.`;
 
   let anthropicRes;
   try {
@@ -97,7 +140,33 @@ Return only the updated JSON in the same format with lat, lng, locationName and 
     return res.status(502).json({ error: "AI service error: " + anthropicRes.status });
   }
 
-  const data = await anthropicRes.json();
+  const data    = await anthropicRes.json();
   const rawText = (data.content ?? []).map(b => b.text ?? "").join("");
+
+  // ── Increment trip counter for logged-in users ─────────────────────────────
+  if (userId && supabaseUrl && supabaseKey) {
+    await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
+      method: "PATCH",
+      headers: {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal",
+      },
+      body: JSON.stringify({ trips_generated: 1 }), // will be incremented via RPC
+    }).catch(() => {});
+
+    // Use RPC to safely increment
+    await fetch(`${supabaseUrl}/rest/v1/rpc/increment_trips`, {
+      method: "POST",
+      headers: {
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ user_id: userId }),
+    }).catch(() => {});
+  }
+
   return res.status(200).json({ raw: rawText });
 }
