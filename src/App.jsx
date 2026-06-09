@@ -296,34 +296,7 @@ function InspireModal({ onClose, onFill }) {
         </div>
         <div style={{ marginBottom:"1rem" }}>
           <div style={{ fontSize:"0.63rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.4rem" }}>Travelling from (optional)</div>
-          <div style={{ display:"flex", gap:"0.5rem" }}>
-            <FocusInput type="text" placeholder="e.g. London, New York..." value={origin} onChange={e=>setOrigin(e.target.value)} style={{ fontSize:"0.88rem", flex:1 }} />
-            <button type="button" title="Use my location"
-              onClick={()=>{
-                if (!navigator.geolocation) return;
-                navigator.geolocation.getCurrentPosition(async pos => {
-                  const { latitude, longitude } = pos.coords;
-                  try {
-                    const r = await fetch(
-                      "https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json&accept-language=en",
-                      { headers: { "Accept": "application/json" } }
-                    );
-                    if (!r.ok) throw new Error("failed");
-                    const d    = await r.json();
-                    const addr = d.address || {};
-                    const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
-                    const ctry = addr.country || "";
-                    if (city) setOrigin(city + (ctry ? ", " + ctry : ""));
-                    else if (d.display_name) setOrigin(d.display_name.split(",")[0].trim());
-                  } catch(e) { console.warn("Geocode failed:", e); }
-                }, (err) => { console.warn("Geo denied:", err); }, { timeout: 8000 });
-              }}
-              style={{ padding:"0.6rem 0.7rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
-              onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
-              onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}>
-              📍
-            </button>
-          </div>
+          <FocusInput type="text" placeholder="e.g. London, New York..." value={origin} onChange={e=>setOrigin(e.target.value)} style={{ fontSize:"0.88rem" }} />
         </div>
         {error && <div style={{ fontSize:"0.8rem", color:"var(--rust-dk)", background:"#fff1ed", padding:"0.5rem 0.75rem", borderRadius:"6px", marginBottom:"0.75rem" }}>{error}</div>}
         <div style={{ display:"flex", gap:"0.6rem" }}>
@@ -676,43 +649,7 @@ export default function App() {
 
                   <FieldCard number={2} icon="🛫" label="Travelling from" hint="Helps estimate travel costs from your starting point"
                     action={<DiceBtn onClick={()=>{ const o=["New York, USA","London, UK","Sydney, Australia","Toronto, Canada","Berlin, Germany","Sao Paulo, Brazil"]; setOrigin(o[Math.floor(Math.random()*o.length)]); }} title="Random origin" />}>
-                    <div style={{ display:"flex", gap:"0.5rem", alignItems:"center" }}>
-                      <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} style={{ flex:1 }} />
-                      <button type="button" title="Use my current location"
-                        onClick={()=>{
-                          if (!navigator.geolocation) return;
-                          navigator.geolocation.getCurrentPosition(async pos => {
-                            const { latitude, longitude } = pos.coords;
-                            try {
-                              const r = await fetch(
-                                "https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json&accept-language=en",
-                                { headers: { "Accept": "application/json" } }
-                              );
-                              if (!r.ok) throw new Error("Geocode failed");
-                              const d = await r.json();
-                              const addr    = d.address || {};
-                              const city    = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
-                              const country = addr.country || "";
-                              if (city) {
-                                setOrigin(city + (country ? ", " + country : ""));
-                              } else if (d.display_name) {
-                                // Fallback: use first part of display name
-                                setOrigin(d.display_name.split(",")[0].trim() + (country ? ", " + country : ""));
-                              }
-                            } catch(e) {
-                              // Silent fail — user can type manually
-                              console.warn("Reverse geocode failed:", e);
-                            }
-                          }, (err) => {
-                            console.warn("Geolocation denied:", err);
-                          }, { timeout: 8000 });
-                        }}
-                        style={{ padding:"0.65rem 0.75rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
-                        onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
-                        onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}>
-                        📍
-                      </button>
-                    </div>
+                    <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} />
                   </FieldCard>
 
                   <FieldCard number={3} icon="📅" label="Travel Dates" hint="When are you going?"

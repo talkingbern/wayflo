@@ -1,55 +1,77 @@
 // src/bookingLinks.js
-// Deterministic deep link builder — takes structured trip data and returns
-// real pre-filled URLs. Never relies on the AI to generate URLs.
+// Deterministic deep link builder
 
 function fmt(dateStr) {
-  // Ensure YYYY-MM-DD format for URLs
   return dateStr ? dateStr.slice(0, 10) : "";
 }
 
-function encodeCity(city) {
-  return encodeURIComponent((city || "").split(",")[0].trim());
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function cityName(str) {
+  return (str || "").split(",")[0].trim();
+}
+
+function isUSCity(str) {
+  const s = (str || "").toLowerCase();
+  return s.includes(", usa") || s.includes(", us") || s.includes(", united states") ||
+    s.includes(", va") || s.includes(", ny") || s.includes(", ca") || s.includes(", tx") ||
+    s.includes(", fl") || s.includes(", il") || s.includes(", pa") || s.includes(", ma") ||
+    s.includes(", dc") || s.includes(", wa") || s.includes(", co") || s.includes(", or") ||
+    s.includes(", ga") || s.includes(", nc") || s.includes(", nj");
+}
+
+function isEuropeanCity(str) {
+  const s = (str || "").toLowerCase();
+  const countries = ["uk", "france", "germany", "spain", "italy", "netherlands", "belgium",
+    "portugal", "switzerland", "austria", "czech", "poland", "hungary", "croatia",
+    "sweden", "norway", "denmark", "finland", "ireland", "scotland", "england"];
+  return countries.some(c => s.includes(c));
 }
 
 // ── Transport links ───────────────────────────────────────────────────────────
 function flightLink(from, to, date) {
   if (!from || !to) return null;
-  const f = encodeURIComponent(from.split(",")[0].trim());
-  const t = encodeURIComponent(to.split(",")[0].trim());
-  const d = fmt(date);
-  // Google Flights supports q= parameter with full natural language query
-  const query = `Flights from ${from.split(",")[0].trim()} to ${to.split(",")[0].trim()}${d ? " on " + d : ""}`;
+  const query = `Flights from ${cityName(from)} to ${cityName(to)}${date ? " on " + fmt(date) : ""}`;
   return {
     label: "Search flights on Google Flights",
     url: `https://www.google.com/travel/flights?q=${encodeURIComponent(query)}`,
   };
 }
 
-function trainLink(from, to, date) {
+function trainLink(from, to) {
   if (!from || !to) return null;
-  const f = encodeURIComponent(from.split(",")[0].trim().toLowerCase().replace(/\s+/g, "-"));
-  const t = encodeURIComponent(to.split(",")[0].trim().toLowerCase().replace(/\s+/g, "-"));
+  const f = cityName(from).toLowerCase().replace(/\s+/g, "-");
+  const t = cityName(to).toLowerCase().replace(/\s+/g, "-");
   return {
     label: "Book train on Trainline",
-    url: `https://www.trainline.com/search/${f}/${t}`,
+    url: `https://www.trainline.com/search/${encodeURIComponent(f)}/${encodeURIComponent(t)}`,
   };
 }
 
-function busLink(from, to) {
+function amtrakLink(from, to, date) {
   if (!from || !to) return null;
-  // FlixBus doesn't support public deep links with city names
-  // Best we can do is their search page
+  // Amtrak search — no station code deep link available publicly
+  // but we can link to their search with a clean query
+  const query = `${cityName(from)} to ${cityName(to)} Amtrak${date ? " " + fmt(date) : ""}`;
   return {
-    label: "Search buses on FlixBus",
-    url: "https://global.flixbus.com",
+    label: "Search Amtrak trains",
+    url: `https://www.amtrak.com/tickets/depart.html`,
+  };
+}
+
+function rome2rioLink(from, to) {
+  if (!from || !to) return null;
+  const f = encodeURIComponent(cityName(from));
+  const t = encodeURIComponent(cityName(to));
+  return {
+    label: `Search routes on Rome2Rio`,
+    url: `https://www.rome2rio.com/s/${f}/${t}`,
   };
 }
 
 function ferryLink(from, to) {
   if (!from || !to) return null;
-  // Direct Ferries search with city names
-  const f = (from.split(",")[0].trim()).toLowerCase().replace(/\s+/g, "+");
-  const t = (to.split(",")[0].trim()).toLowerCase().replace(/\s+/g, "+");
+  const f = cityName(from).toLowerCase().replace(/\s+/g, "+");
+  const t = cityName(to).toLowerCase().replace(/\s+/g, "+");
   return {
     label: "Find ferries on Direct Ferries",
     url: `https://www.directferries.co.uk/passenger_ferries.htm?from=${f}&to=${t}`,
@@ -67,26 +89,20 @@ function driveLink(from, to) {
 // ── Accommodation links ───────────────────────────────────────────────────────
 function hostelLink(city, dateFrom, dateTo) {
   if (!city) return null;
-  const cityName = city.split(",")[0].trim();
-  // Hostelworld search URL format
-  const params = new URLSearchParams({
-    search_keywords: cityName,
-    search_type: "city",
-    ...(dateFrom ? { date_from: fmt(dateFrom) } : {}),
-    ...(dateTo   ? { date_to:   fmt(dateTo)   } : {}),
-    number_of_guests: "1",
-  });
+  const c = cityName(city);
+  // Use Google search as reliable fallback since Hostelworld URLs are unstable
+  const query = `hostels in ${c}${dateFrom ? " " + fmt(dateFrom) : ""}`;
   return {
-    label: `Find hostels in ${cityName} on Hostelworld`,
-    url: `https://www.hostelworld.com/pwa/wds/properties?${params.toString()}`,
+    label: `Find hostels in ${c}`,
+    url: `https://www.google.com/search?q=${encodeURIComponent(query)}+hostelworld+booking`,
   };
 }
 
 function hotelLink(city, dateFrom, dateTo) {
   if (!city) return null;
-  const cityName = city.split(",")[0].trim();
+  const c = cityName(city);
   const params = new URLSearchParams({
-    ss: cityName,
+    ss: c,
     ...(dateFrom ? { checkin:  fmt(dateFrom) } : {}),
     ...(dateTo   ? { checkout: fmt(dateTo)   } : {}),
     group_adults: "1",
@@ -99,60 +115,72 @@ function hotelLink(city, dateFrom, dateTo) {
 }
 
 // ── Main builder ──────────────────────────────────────────────────────────────
-// Generates booking links for each day based on transport type and context.
-// origin/destination are city strings, dateFrom/dateTo are YYYY-MM-DD strings.
 export function buildBookingLinks(day, { origin, destination, dateFrom, dateTo }) {
-  const links = [];
-  const title   = (day.title || "").toLowerCase();
+  const links  = [];
+  const title   = (day.title   || "").toLowerCase();
   const content = (day.content || "").toLowerCase();
   const type    = (day.transportType || "").toLowerCase();
+
   const isGettingThere = title.includes("getting there") || title.includes("day 0");
   const isGettingHome  = title.includes("getting home")  || title.includes("departure");
 
-  // Transport links for travel days
   if (isGettingThere || isGettingHome) {
     const from = isGettingThere ? origin      : destination;
     const to   = isGettingThere ? destination : origin;
     const date = isGettingThere ? dateFrom    : dateTo;
 
-    if (type === "flight" || (!type && (content.includes("fly") || content.includes("flight") || content.includes("airport")))) {
+    const isFlight = type === "flight" || (!type && (content.includes("fly") || content.includes("flight") || content.includes("airport")));
+    const isTrain  = type === "train"  || (!type && (content.includes("train") || content.includes("rail") || content.includes("amtrak") || content.includes("eurostar")));
+    const isFerry  = type === "ferry"  || content.includes("ferry");
+    const isDrive  = type === "drive"  || (content.includes("drive") && !isTrain && !isFlight);
+    const isBus    = type === "bus"    || content.includes("flixbus") || content.includes("coach");
+
+    if (isFlight) {
       const link = flightLink(from, to, date);
       if (link) links.push(link);
-    } else if (type === "train" || content.includes("train") || content.includes("rail") || content.includes("eurostar")) {
-      const link = trainLink(from, to, date);
-      if (link) links.push(link);
-      // Also add flight as alternative
+    } else if (isTrain) {
+      // Amtrak for US routes, Trainline for European, Rome2Rio for everything else
+      if (content.includes("amtrak") || (isUSCity(from) && isUSCity(to))) {
+        const link = amtrakLink(from, to, date);
+        if (link) links.push(link);
+      } else if (isEuropeanCity(from) || isEuropeanCity(to)) {
+        const link = trainLink(from, to);
+        if (link) links.push(link);
+      } else {
+        const link = rome2rioLink(from, to);
+        if (link) links.push(link);
+      }
+      // Offer flight as alternative
       const flight = flightLink(from, to, date);
       if (flight) links.push({ ...flight, label: "Or search flights" });
-    } else if (type === "bus" || content.includes("flixbus") || content.includes("coach")) {
-      const link = busLink(from, to);
-      if (link) links.push(link);
-    } else if (type === "ferry" || content.includes("ferry")) {
+    } else if (isFerry) {
       const link = ferryLink(from, to);
       if (link) links.push(link);
-    } else if (type === "drive" || content.includes("drive") || content.includes("road trip")) {
+    } else if (isDrive) {
       const link = driveLink(from, to);
       if (link) links.push(link);
+    } else if (isBus) {
+      // No reliable bus deep links — use Rome2Rio
+      const link = rome2rioLink(from, to);
+      if (link) links.push(link);
     } else {
-      // Unknown — offer flight and train
+      // Unknown transport — offer Rome2Rio + flights
+      const r2r    = rome2rioLink(from, to);
       const flight = flightLink(from, to, date);
-      const train  = trainLink(from, to, date);
+      if (r2r)    links.push(r2r);
       if (flight) links.push(flight);
-      if (train)  links.push(train);
     }
 
-    // Accommodation link for arrival day
+    // Accommodation for arrival day
     if (isGettingThere) {
       const hostel = hostelLink(destination, dateFrom, dateTo);
       if (hostel) links.push(hostel);
     }
   }
 
-  // For regular days that mention specific transport (internal travel)
-  if (!isGettingThere && !isGettingHome) {
-    if (content.includes("ferry")) {
-      links.push({ label: "Find ferries on Direct Ferries", url: "https://www.directferries.co.uk" });
-    }
+  // Ferry links on non-travel days if content mentions ferries
+  if (!isGettingThere && !isGettingHome && content.includes("ferry")) {
+    links.push({ label: "Find ferries on Direct Ferries", url: "https://www.directferries.co.uk" });
   }
 
   return links;
