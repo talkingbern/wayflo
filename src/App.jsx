@@ -296,7 +296,27 @@ function InspireModal({ onClose, onFill }) {
         </div>
         <div style={{ marginBottom:"1rem" }}>
           <div style={{ fontSize:"0.63rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.4rem" }}>Travelling from (optional)</div>
-          <FocusInput type="text" placeholder="e.g. London, New York..." value={origin} onChange={e=>setOrigin(e.target.value)} style={{ fontSize:"0.88rem" }} />
+          <div style={{ display:"flex", gap:"0.5rem" }}>
+            <FocusInput type="text" placeholder="e.g. London, New York..." value={origin} onChange={e=>setOrigin(e.target.value)} style={{ fontSize:"0.88rem", flex:1 }} />
+            <button type="button" title="Use my location"
+              onClick={()=>{
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition(async pos => {
+                  try {
+                    const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+pos.coords.latitude+"&lon="+pos.coords.longitude+"&format=json");
+                    const d = await r.json();
+                    const city    = d.address?.city||d.address?.town||d.address?.village||"";
+                    const country = d.address?.country||"";
+                    if (city) setOrigin(city+(country?", "+country:""));
+                  } catch(e) {}
+                }, ()=>{});
+              }}
+              style={{ padding:"0.6rem 0.7rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
+              onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
+              onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}>
+              📍
+            </button>
+          </div>
         </div>
         {error && <div style={{ fontSize:"0.8rem", color:"var(--rust-dk)", background:"#fff1ed", padding:"0.5rem 0.75rem", borderRadius:"6px", marginBottom:"0.75rem" }}>{error}</div>}
         <div style={{ display:"flex", gap:"0.6rem" }}>
@@ -516,7 +536,7 @@ export default function App() {
         </div>
         <nav style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
           {phase==="result" && !showHistory && (
-            <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); }}
+            <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); setDestination(""); setOrigin(""); setDateFrom(""); setDateTo(""); setBudget(""); setTravelStyle(""); setInterests([]); setSaved(false); }}
               style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
               ← New trip
             </button>

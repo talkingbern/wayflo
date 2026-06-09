@@ -16,10 +16,12 @@ function flightLink(from, to, date) {
   if (!from || !to) return null;
   const f = encodeURIComponent(from.split(",")[0].trim());
   const t = encodeURIComponent(to.split(",")[0].trim());
-  const d = fmt(date).replace(/-/g, "");
+  const d = fmt(date);
+  // Google Flights supports q= parameter with full natural language query
+  const query = `Flights from ${from.split(",")[0].trim()} to ${to.split(",")[0].trim()}${d ? " on " + d : ""}`;
   return {
     label: "Search flights on Google Flights",
-    url: `https://www.google.com/travel/flights?q=Flights+from+${f}+to+${t}${d ? `+on+${d}` : ""}`,
+    url: `https://www.google.com/travel/flights?q=${encodeURIComponent(query)}`,
   };
 }
 
@@ -35,19 +37,22 @@ function trainLink(from, to, date) {
 
 function busLink(from, to) {
   if (!from || !to) return null;
+  // FlixBus doesn't support public deep links with city names
+  // Best we can do is their search page
   return {
-    label: "Find buses on FlixBus",
-    url: `https://global.flixbus.com/bus-routes`,
+    label: "Search buses on FlixBus",
+    url: "https://global.flixbus.com",
   };
 }
 
 function ferryLink(from, to) {
   if (!from || !to) return null;
-  const f = encodeURIComponent(from.split(",")[0].trim());
-  const t = encodeURIComponent(to.split(",")[0].trim());
+  // Direct Ferries search with city names
+  const f = (from.split(",")[0].trim()).toLowerCase().replace(/\s+/g, "+");
+  const t = (to.split(",")[0].trim()).toLowerCase().replace(/\s+/g, "+");
   return {
     label: "Find ferries on Direct Ferries",
-    url: `https://www.directferries.com/search_results.htm?from_port=${f}&to_port=${t}`,
+    url: `https://www.directferries.co.uk/passenger_ferries.htm?from=${f}&to=${t}`,
   };
 }
 
@@ -142,12 +147,7 @@ export function buildBookingLinks(day, { origin, destination, dateFrom, dateTo }
   // For regular days that mention specific transport (internal travel)
   if (!isGettingThere && !isGettingHome) {
     if (content.includes("ferry")) {
-      const loc = day.locationName || destination;
-      links.push({ label: "Find local ferries", url: `https://www.directferries.com` });
-    }
-    if (content.includes("train") && content.includes("book")) {
-      const link = trainLink(day.locationName, destination, dateFrom);
-      if (link) links.push(link);
+      links.push({ label: "Find ferries on Direct Ferries", url: "https://www.directferries.co.uk" });
     }
   }
 

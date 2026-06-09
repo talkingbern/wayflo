@@ -118,6 +118,12 @@ Return only the updated JSON in the same format. No markdown fences.`;
   if (!anthropicRes.ok) {
     const err = await anthropicRes.text();
     console.error("Anthropic error:", anthropicRes.status, err);
+    if (anthropicRes.status === 429) {
+      return res.status(503).json({ error: "We're experiencing high demand right now. Please try again in a few minutes." });
+    }
+    if (anthropicRes.status === 402 || (err && err.includes("credit"))) {
+      return res.status(503).json({ error: "Service temporarily unavailable. Please try again later." });
+    }
     return res.status(502).json({ error: "AI service error: " + anthropicRes.status });
   }
 

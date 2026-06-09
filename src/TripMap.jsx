@@ -1,5 +1,5 @@
 // src/TripMap.jsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -29,26 +29,37 @@ export default function TripMap({ days }) {
     .map((d, i) => ({ ...d, index: i }))
     .filter(d => d.lat && d.lng && !isNaN(parseFloat(d.lat)) && !isNaN(parseFloat(d.lng)));
 
+  const activePinRef = useRef(null);
+
   function flyToPin(pin) {
     if (!mapRef.current || !mapReady) return;
-    mapRef.current.flyTo({
-      center: [parseFloat(pin.lng), parseFloat(pin.lat)],
-      zoom: 13,
-      duration: 900,
-      essential: true,
-    });
+    try {
+      mapRef.current.flyTo({
+        center: [parseFloat(pin.lng), parseFloat(pin.lat)],
+        zoom: 13,
+        duration: 900,
+        essential: true,
+      });
+    } catch(e) { console.warn("flyTo error:", e); }
   }
 
   function resetView() {
     if (!mapRef.current || !mapReady || !initialBoundsRef.current) return;
-    mapRef.current.fitBounds(initialBoundsRef.current, { padding: 50, duration: 900 });
+    try {
+      mapRef.current.fitBounds(initialBoundsRef.current, { padding: 50, duration: 900 });
+    } catch(e) {}
+    activePinRef.current = null;
     setActivePin(null);
   }
 
   function handlePinClick(pin) {
-    const newActive = pin.index === activePin ? null : pin.index;
-    setActivePin(newActive);
-    if (newActive !== null) flyToPin(pin);
+    // Use setTimeout to decouple from Mapbox event loop and avoid React crash
+    setTimeout(() => {
+      const newActive = activePinRef.current === pin.index ? null : pin.index;
+      activePinRef.current = newActive;
+      setActivePin(newActive);
+      if (newActive !== null) flyToPin(pin);
+    }, 0);
   }
 
   useEffect(() => {

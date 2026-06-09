@@ -103,8 +103,10 @@ export default function TripHistory({ onClose }) {
   const [error, setError]       = useState("");
   const [deleting, setDeleting] = useState(null);
   const [dayPhotos, setDayPhotos] = useState({});
+  const [heroPhoto, setHeroPhoto] = useState(null);
   const dayRefs    = useRef({});
-  const photoCache = useRef({}); // keyed by tripId_dayIndex to avoid refetching
+  const photoCache = useRef({});
+  const heroCache  = useRef({}); // keyed by tripId_dayIndex to avoid refetching
 
   useEffect(() => {
     async function load() {
@@ -116,6 +118,26 @@ export default function TripHistory({ onClose }) {
     }
     load();
   }, []);
+
+  // Fetch hero photo for selected trip
+  useEffect(() => {
+    if (!selected || !UNSPLASH_KEY) return;
+    setHeroPhoto(null);
+    if (heroCache.current[selected.id]) {
+      setHeroPhoto(heroCache.current[selected.id]);
+      return;
+    }
+    const query = (selected.itinerary?.photoQuery || selected.destination || "travel");
+    fetch("https://api.unsplash.com/photos/random?query="+encodeURIComponent(query)+"&orientation=landscape&client_id="+UNSPLASH_KEY)
+      .then(r=>r.json())
+      .then(data=>{
+        if (data?.urls?.regular) {
+          const photo = { url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } };
+          heroCache.current[selected.id] = photo;
+          setHeroPhoto(photo);
+        }
+      }).catch(()=>{});
+  }, [selected?.id]);
 
   // Fetch photos for selected trip days — cached by tripId+dayIndex
   useEffect(() => {
@@ -207,6 +229,18 @@ export default function TripHistory({ onClose }) {
 
       {!loading && selected && itinerary && (
         <div>
+          {/* Hero photo */}
+          {heroPhoto && (
+            <div style={{ width:"100%", height:"200px", borderRadius:"12px", overflow:"hidden", position:"relative", marginBottom:"1.25rem" }}>
+              <img src={heroPhoto.url} alt={selected.destination} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+              {heroPhoto.credit && (
+                <a href={heroPhoto.credit.link+"?utm_source=wayflo&utm_medium=referral"} target="_blank" rel="noopener noreferrer"
+                  style={{ position:"absolute", bottom:"6px", right:"8px", fontSize:"0.6rem", color:"rgba(255,255,255,0.8)", textDecoration:"none" }}>
+                  {heroPhoto.credit.name} / Unsplash
+                </a>
+              )}
+            </div>
+          )}
           {/* Meta pills */}
           <div style={{ display:"flex", gap:"0.45rem", flexWrap:"wrap", marginBottom:"1.25rem" }}>
             {[selected.origin&&"From "+selected.origin, selected.date_from&&selected.date_from+" to "+selected.date_to, selected.budget, selected.travel_style].filter(Boolean).map(tag=>(

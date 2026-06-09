@@ -1,5 +1,4 @@
 // api/inspire.js
-// Serverless function for Inspire Me — keeps API key server-side
 export const config = { runtime: "nodejs" };
 
 export default async function handler(req, res) {
@@ -11,10 +10,16 @@ export default async function handler(req, res) {
   const { vibe, duration, budget, origin } = req.body ?? {};
   if (!vibe) return res.status(400).json({ error: "Missing vibe." });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const currentYear = new Date().getFullYear();
+
   const prompt = `Suggest a perfect backpacker trip for someone who wants a ${vibe} vibe.
 ${duration ? "Trip length: " + duration : ""}
 ${budget ? "Budget: " + budget : ""}
 ${origin ? "Travelling from: " + origin : ""}
+
+Today's date is ${today}. All dates MUST be in ${currentYear} or later — never suggest past dates.
+Pick dates that start at least 2 weeks from today and feel realistic for the vibe.
 
 Reply ONLY with a JSON object, no markdown fences:
 {

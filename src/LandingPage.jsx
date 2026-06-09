@@ -152,7 +152,7 @@ export default function LandingPage({ onGetStarted }) {
             <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"3rem", fontWeight:900, color:"var(--rust)", lineHeight:1 }}>Free</div>
             <div style={{ fontSize:"0.85rem", color:"var(--warm-mid)", marginBottom:"1.25rem" }}>for your first itinerary</div>
             <div style={{ height:1, background:"var(--sand)", marginBottom:"1.25rem" }} />
-            <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"2rem", fontWeight:900, color:"var(--ink)", lineHeight:1 }}>$5</div>
+            <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"2rem", fontWeight:900, color:"var(--ink)", lineHeight:1 }}>$2</div>
             <div style={{ fontSize:"0.85rem", color:"var(--warm-mid)", marginBottom:"1.5rem" }}>per itinerary after that</div>
             <button onClick={onGetStarted}
               style={{ width:"100%", padding:"0.85rem", background:"var(--rust)", border:"none", borderRadius:"8px", fontSize:"0.95rem", fontWeight:600, cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif" }}>
