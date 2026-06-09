@@ -302,14 +302,21 @@ function InspireModal({ onClose, onFill }) {
               onClick={()=>{
                 if (!navigator.geolocation) return;
                 navigator.geolocation.getCurrentPosition(async pos => {
+                  const { latitude, longitude } = pos.coords;
                   try {
-                    const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+pos.coords.latitude+"&lon="+pos.coords.longitude+"&format=json");
-                    const d = await r.json();
-                    const city    = d.address?.city||d.address?.town||d.address?.village||"";
-                    const country = d.address?.country||"";
-                    if (city) setOrigin(city+(country?", "+country:""));
-                  } catch(e) {}
-                }, ()=>{});
+                    const r = await fetch(
+                      "https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json&accept-language=en",
+                      { headers: { "Accept": "application/json" } }
+                    );
+                    if (!r.ok) throw new Error("failed");
+                    const d    = await r.json();
+                    const addr = d.address || {};
+                    const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
+                    const ctry = addr.country || "";
+                    if (city) setOrigin(city + (ctry ? ", " + ctry : ""));
+                    else if (d.display_name) setOrigin(d.display_name.split(",")[0].trim());
+                  } catch(e) { console.warn("Geocode failed:", e); }
+                }, (err) => { console.warn("Geo denied:", err); }, { timeout: 8000 });
               }}
               style={{ padding:"0.6rem 0.7rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
               onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
@@ -675,14 +682,30 @@ export default function App() {
                         onClick={()=>{
                           if (!navigator.geolocation) return;
                           navigator.geolocation.getCurrentPosition(async pos => {
+                            const { latitude, longitude } = pos.coords;
                             try {
-                              const r = await fetch("https://nominatim.openstreetmap.org/reverse?lat="+pos.coords.latitude+"&lon="+pos.coords.longitude+"&format=json");
+                              const r = await fetch(
+                                "https://nominatim.openstreetmap.org/reverse?lat="+latitude+"&lon="+longitude+"&format=json&accept-language=en",
+                                { headers: { "Accept": "application/json" } }
+                              );
+                              if (!r.ok) throw new Error("Geocode failed");
                               const d = await r.json();
-                              const city    = d.address?.city||d.address?.town||d.address?.village||"";
-                              const country = d.address?.country||"";
-                              if (city) setOrigin(city+(country?", "+country:""));
-                            } catch(e) {}
-                          }, ()=>{});
+                              const addr    = d.address || {};
+                              const city    = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
+                              const country = addr.country || "";
+                              if (city) {
+                                setOrigin(city + (country ? ", " + country : ""));
+                              } else if (d.display_name) {
+                                // Fallback: use first part of display name
+                                setOrigin(d.display_name.split(",")[0].trim() + (country ? ", " + country : ""));
+                              }
+                            } catch(e) {
+                              // Silent fail — user can type manually
+                              console.warn("Reverse geocode failed:", e);
+                            }
+                          }, (err) => {
+                            console.warn("Geolocation denied:", err);
+                          }, { timeout: 8000 });
                         }}
                         style={{ padding:"0.65rem 0.75rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", cursor:"pointer", fontSize:"1rem", lineHeight:1, flexShrink:0, transition:"border-color 0.15s" }}
                         onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}

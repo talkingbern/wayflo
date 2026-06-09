@@ -67,29 +67,33 @@ function driveLink(from, to) {
 // ── Accommodation links ───────────────────────────────────────────────────────
 function hostelLink(city, dateFrom, dateTo) {
   if (!city) return null;
-  const c = encodeCity(city);
+  const cityName = city.split(",")[0].trim();
+  // Hostelworld search URL format
   const params = new URLSearchParams({
-    search_keywords: city.split(",")[0].trim(),
+    search_keywords: cityName,
+    search_type: "city",
     ...(dateFrom ? { date_from: fmt(dateFrom) } : {}),
     ...(dateTo   ? { date_to:   fmt(dateTo)   } : {}),
-    no_of_adults: "1",
+    number_of_guests: "1",
   });
   return {
-    label: `Find hostels in ${city.split(",")[0].trim()} on Hostelworld`,
-    url: `https://www.hostelworld.com/search?${params.toString()}`,
+    label: `Find hostels in ${cityName} on Hostelworld`,
+    url: `https://www.hostelworld.com/pwa/wds/properties?${params.toString()}`,
   };
 }
 
 function hotelLink(city, dateFrom, dateTo) {
   if (!city) return null;
+  const cityName = city.split(",")[0].trim();
   const params = new URLSearchParams({
-    ss: city.split(",")[0].trim(),
+    ss: cityName,
     ...(dateFrom ? { checkin:  fmt(dateFrom) } : {}),
     ...(dateTo   ? { checkout: fmt(dateTo)   } : {}),
     group_adults: "1",
+    no_rooms: "1",
   });
   return {
-    label: `Browse hotels on Booking.com`,
+    label: `Browse accommodation on Booking.com`,
     url: `https://www.booking.com/searchresults.html?${params.toString()}`,
   };
 }
