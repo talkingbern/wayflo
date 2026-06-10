@@ -90,11 +90,17 @@ function driveLink(from, to) {
 function hostelLink(city, dateFrom, dateTo) {
   if (!city) return null;
   const c = cityName(city);
-  // Use Google search as reliable fallback since Hostelworld URLs are unstable
-  const query = `hostels in ${c}${dateFrom ? " " + fmt(dateFrom) : ""}`;
+  // Booking.com has reliable URL format and covers hostels too
+  const params = new URLSearchParams({
+    ss: c,
+    ...(dateFrom ? { checkin:  fmt(dateFrom) } : {}),
+    ...(dateTo   ? { checkout: fmt(dateTo)   } : {}),
+    group_adults: "1",
+    no_rooms: "1",
+  });
   return {
-    label: `Find hostels in ${c}`,
-    url: `https://www.google.com/search?q=${encodeURIComponent(query)}+hostelworld+booking`,
+    label: `Find accommodation in ${c} on Booking.com`,
+    url: `https://www.booking.com/searchresults.html?${params.toString()}`,
   };
 }
 

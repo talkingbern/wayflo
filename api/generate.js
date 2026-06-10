@@ -14,23 +14,43 @@ export default async function handler(req, res) {
   if (!destination || !dateFrom || !dateTo || !budget || !travelStyle) return res.status(400).json({ error: "Missing required fields." });
 
   // ── Trip limit enforcement ─────────────────────────────────────────────────
-  // Guests (no userId): allow only first call — tracked client-side, enforced loosely
-  // Logged-in users: check profiles table. Must have paid (paidTrips > 0) or be on first trip.
   if (userId && supabaseUrl && supabaseKey) {
-    const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated`, {
-      headers: {
-        "apikey": supabaseKey,
-        "Authorization": `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-      }
-    });
-    const profiles = await profileRes.json();
-    const profile  = profiles?.[0];
+    let tripsGenerated = 0;
+    try {
+      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated`, {
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        }
+      });
+      const profiles = await profileRes.json();
+      const profile  = profiles?.[0];
 
-    if (profile && profile.trips_generated >= 1) {
-      // Check if they have a paid trip available — passed from client
-      const { paidTrips } = req.body;
-      if (!paidTrips || paidTrips < 1) {
+      if (!profile) {
+        // Profile missing — create it (user signed up before trigger existed)
+        await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+          method: "POST",
+          headers: {
+            "apikey": supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+          },
+          body: JSON.stringify({ id: userId, trips_generated: 0 }),
+        });
+        tripsGenerated = 0;
+      } else {
+        tripsGenerated = profile.trips_generated || 0;
+      }
+    } catch(e) {
+      console.error("Profile check failed:", e);
+      // Fail open — don't block user if DB check fails
+    }
+
+    if (tripsGenerated >= 1) {
+      const clientPaidTrips = parseInt(req.body.paidTrips) || 0;
+      if (clientPaidTrips < 1) {
         return res.status(402).json({ error: "payment_required" });
       }
     }
@@ -49,7 +69,13 @@ CRITICAL RULES FOR TRANSPORT ESTIMATES:
 - Always give time RANGES not exact times. Format: "allow X-Xhrs depending on route/stops"
 - The lower end should reflect best-case advance booking. The upper end should reflect average/walk-up.
 - Never imply one price is what the user will pay. Prices vary by season and booking time.
-- For flights: note that prices vary hugely and to set a Google Flights alert.`;
+- For flights: note that prices vary hugely and to set a Google Flights alert.
+
+EVENTS AWARENESS:
+- If any major festivals, sporting events, concerts, or cultural events are known to occur at the destination during the trip dates, mention them specifically on the relevant day.
+- Examples: Carnival in Rio, Running of the Bulls in Pamplona, Guelaguetza in Oaxaca, Glastonbury, Oktoberfest, World Cup matches, Olympics, major marathons, national holidays.
+- Note if events mean prices will be higher or booking needs to happen further in advance.
+- Only mention events you are confident occur during those dates — do not invent events.`;
 
   const tripContext = `Destination: ${destination}
 ${origin ? "Travelling from: " + origin : ""}

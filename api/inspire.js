@@ -14,6 +14,7 @@ export default async function handler(req, res) {
   const currentYear = new Date().getFullYear();
 
   const prompt = `Suggest a perfect backpacker trip for someone who wants a ${vibe} vibe.
+Be creative with destination choice — avoid suggesting the same popular cities repeatedly. Consider lesser-known gems, emerging destinations, and off-the-beaten-path locations alongside well-known ones.
 ${duration ? "Trip length: " + duration : ""}
 ${budget ? "Budget: " + budget : ""}
 ${origin ? "Travelling from: " + origin : ""}
