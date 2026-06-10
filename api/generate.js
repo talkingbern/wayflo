@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const apiKey      = process.env.ANTHROPIC_API_KEY;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!apiKey) return res.status(500).json({ error: "Missing API key." });
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
   const isRefinement = Boolean(refineFeedback && previousItinerary);
 
   const systemPrompt = `You are Wayflo, a travel planner for budget backpackers aged 18-25.
-Your output is ALWAYS a single valid JSON object, no markdown fences, no prose outside the JSON.
+Your output is ALWAYS a single valid JSON object. NEVER wrap it in markdown code fences (no ```json or ```). No prose before or after the JSON. Start your response with { and end with }.
 Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each).
 Tone: excited friend who has been there, not a travel brochure.
 
