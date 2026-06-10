@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       // Fail open — don't block user if DB check fails
     }
 
-    if (tripsGenerated >= 1) {
+    if (tripsGenerated >= 3) {
       const clientPaidTrips = parseInt(req.body.paidTrips) || 0;
       if (clientPaidTrips < 1) {
         return res.status(402).json({ error: "payment_required" });
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
   const isRefinement = Boolean(refineFeedback && previousItinerary);
 
   const systemPrompt = `You are Wayflo, a travel planner for budget backpackers aged 18-25.
-Your output is ALWAYS a single valid JSON object. NEVER wrap it in markdown code fences (no ```json or ```). No prose before or after the JSON. Start your response with { and end with }.
+Your output is ALWAYS a single valid JSON object. NEVER use markdown code fences. No prose before or after the JSON. Start your response with { and end with }.
 Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each).
 Tone: excited friend who has been there, not a travel brochure.
 
