@@ -1,5 +1,5 @@
 // api/checkout.js
-// Creates a Stripe Checkout session for a $5 itinerary purchase
+// Creates a Stripe Checkout session for a $2 itinerary purchase
 // Required env vars: STRIPE_SECRET_KEY, VITE_STRIPE_PUBLISHABLE_KEY
 
 export const config = { runtime: "nodejs" };

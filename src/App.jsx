@@ -428,7 +428,19 @@ export default function App() {
 
   function parseItinerary(text, tripContext) {
     try {
-      const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+      // Strip markdown fences, handle both styles
+      let clean = text.trim();
+      // Remove ```json ... ``` wrapper
+      clean = clean.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+      // Remove any remaining backtick fences
+      clean = clean.replace(/```/g, "").trim();
+      // Find the first { to handle any preamble text
+      const firstBrace = clean.indexOf("{");
+      if (firstBrace > 0) clean = clean.slice(firstBrace);
+      // Find the last } to handle any trailing text
+      const lastBrace = clean.lastIndexOf("}");
+      if (lastBrace !== -1 && lastBrace < clean.length - 1) clean = clean.slice(0, lastBrace + 1);
+      const parsed = JSON.parse(clean);
       // Enrich with deterministic booking links
       if (parsed.days && tripContext) {
         parsed.days = parsed.days.map(day => ({
