@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   // Use Stripe's REST API directly — no SDK needed
   const params = new URLSearchParams({
-    "line_items[0][price]":    "price_1TfotW49tmrUaZplHvdB70vx",
+    "line_items[0][price]":    "price_1TgrHW49tmrUaZplUuBobaIn",
     "line_items[0][quantity]": "1",
     "mode":                    "payment",
     "success_url":             "https://wayflo-bay.vercel.app/?payment=success&session_id={CHECKOUT_SESSION_ID}",
