@@ -16,8 +16,9 @@ export default async function handler(req, res) {
   // ── Trip limit enforcement ─────────────────────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
     let tripsGenerated = 0;
+    let dbPaidTrips    = 0;
     try {
-      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated`, {
+      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated,paid_trips`, {
         headers: {
           "apikey": supabaseKey,
           "Authorization": `Bearer ${supabaseKey}`,
@@ -28,7 +29,6 @@ export default async function handler(req, res) {
       const profile  = profiles?.[0];
 
       if (!profile) {
-        // Profile missing — create it (user signed up before trigger existed)
         await fetch(`${supabaseUrl}/rest/v1/profiles`, {
           method: "POST",
           headers: {
@@ -37,22 +37,20 @@ export default async function handler(req, res) {
             "Content-Type": "application/json",
             "Prefer": "return=minimal",
           },
-          body: JSON.stringify({ id: userId, trips_generated: 0 }),
+          body: JSON.stringify({ id: userId, trips_generated: 0, paid_trips: 0 }),
         });
         tripsGenerated = 0;
+        dbPaidTrips    = 0;
       } else {
         tripsGenerated = profile.trips_generated || 0;
+        dbPaidTrips    = profile.paid_trips || 0;
       }
     } catch(e) {
       console.error("Profile check failed:", e);
-      // Fail open — don't block user if DB check fails
     }
 
-    if (tripsGenerated >= 3) {
-      const clientPaidTrips = parseInt(req.body.paidTrips) || 0;
-      if (clientPaidTrips < 1) {
-        return res.status(402).json({ error: "payment_required" });
-      }
+    if (tripsGenerated >= 3 && dbPaidTrips < 1) {
+      return res.status(402).json({ error: "payment_required" });
     }
   }
 
@@ -156,20 +154,9 @@ Return only the updated JSON in the same format. No markdown fences.`;
   const data    = await anthropicRes.json();
   const rawText = (data.content ?? []).map(b => b.text ?? "").join("");
 
-  // ── Increment trip counter for logged-in users ─────────────────────────────
+  // ── Update counters for logged-in users ──────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
-    await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
-      method: "PATCH",
-      headers: {
-        "apikey": supabaseKey,
-        "Authorization": `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
-      },
-      body: JSON.stringify({ trips_generated: 1 }), // will be incremented via RPC
-    }).catch(() => {});
-
-    // Use RPC to safely increment
+    // Increment trips_generated via RPC
     await fetch(`${supabaseUrl}/rest/v1/rpc/increment_trips`, {
       method: "POST",
       headers: {
@@ -179,6 +166,20 @@ Return only the updated JSON in the same format. No markdown fences.`;
       },
       body: JSON.stringify({ user_id: userId }),
     }).catch(() => {});
+
+    // If this was a paid trip, decrement paid_trips
+    if (dbPaidTrips > 0) {
+      await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
+        method: "PATCH",
+        headers: {
+          "apikey": supabaseKey,
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          "Prefer": "return=minimal",
+        },
+        body: JSON.stringify({ paid_trips: dbPaidTrips - 1 }),
+      }).catch(() => {});
+    }
   }
 
   return res.status(200).json({ raw: rawText });

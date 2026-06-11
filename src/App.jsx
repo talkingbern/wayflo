@@ -226,7 +226,7 @@ function PaywallBanner({ onSignIn, onPay, user }) {
   return (
     <div style={{ background:"var(--white)", border:"2px solid var(--rust)", borderRadius:"12px", padding:"1.5rem", textAlign:"center", marginBottom:"1.5rem", animation:"fadeUp 0.3s ease both" }}>
       <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:900, marginBottom:"0.4rem" }}>Your free trip is used up</div>
-      <p style={{ fontSize:"0.85rem", color:"var(--warm-mid)", lineHeight:1.6, marginBottom:"1rem" }}>Each new itinerary is $2 — one flat fee, no subscription.</p>
+      <p style={{ fontSize:"0.85rem", color:"var(--warm-mid)", lineHeight:1.6, marginBottom:"1rem" }}>Your 3 free trips are used up. Each new itinerary is $2 — one flat fee, no subscription.</p>
       {!user ? (
         <button onClick={onSignIn} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>Sign in to continue</button>
       ) : (
@@ -343,13 +343,30 @@ export default function App() {
   const requestInFlight                     = useRef(false);
   const dayRefs                             = useRef({});
 
+  async function fetchTripStatus(userId) {
+    try {
+      const res = await fetch("/api/trips-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      // Initialize tripCount from DB so paywall is correct across sessions
+      setTripCount(data.trips_generated || 0);
+      setPaidTrips(data.paid_trips || 0);
+    } catch(e) { console.warn("Could not fetch trip status:", e); }
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setAuthReady(true);
+      if (session?.user) fetchTripStatus(session.user.id);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) fetchTripStatus(session.user.id);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -358,7 +375,16 @@ export default function App() {
     const params  = new URLSearchParams(window.location.search);
     const payment = params.get("payment");
     if (payment === "success" || payment === "cancelled") {
-      if (payment === "success") { setPaymentStatus("success"); setPaidTrips(n=>n+1); }
+      if (payment === "success") {
+        setPaymentStatus("success");
+        // Don't set paidTrips here — fetchTripStatus will get the real value from DB
+        // after the webhook has credited it. Small delay to allow webhook processing.
+        setTimeout(() => {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) fetchTripStatus(session.user.id);
+          });
+        }, 2000);
+      }
       else setPaymentStatus("cancelled");
       try {
         const saved = localStorage.getItem("wayflo_form");
@@ -391,7 +417,7 @@ export default function App() {
 
   async function signOut() { await supabase.auth.signOut(); setTripCount(0); setPaidTrips(0); }
 
-  const isBlocked = tripCount > 0 && !(user && paidTrips > 0);
+  const isBlocked = tripCount >= 3 && !(user && paidTrips > 0);
 
   async function startCheckout() {
     if (!user) { setShowAuth(true); return; }
@@ -617,7 +643,7 @@ export default function App() {
 
               {!user && tripCount===0 && phase==="form" && (
                 <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.85rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1.1rem" }}>
-                  ✦ First itinerary is free — no account needed
+                  ✦ First 3 itineraries are free — no account needed
                 </div>
               )}
               {paymentStatus==="success" && phase==="form" && (
