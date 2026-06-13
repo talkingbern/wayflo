@@ -11,12 +11,12 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "Missing API key." });
 
   const { destination, dateFrom, dateTo, budget, origin, travelStyle, interests, refineFeedback, previousItinerary, userId } = req.body ?? {};
+  let dbPaidTrips = 0; // declared at top level so increment section can access it
   if (!destination || !dateFrom || !dateTo || !budget || !travelStyle) return res.status(400).json({ error: "Missing required fields." });
 
   // ── Trip limit enforcement ─────────────────────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
     let tripsGenerated = 0;
-    let dbPaidTrips    = 0;
     try {
       const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=trips_generated,paid_trips`, {
         headers: {
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({ id: userId, trips_generated: 0, paid_trips: 0 }),
         });
         tripsGenerated = 0;
-        dbPaidTrips    = 0;
+        dbPaidTrips = 0;
       } else {
         tripsGenerated = profile.trips_generated || 0;
         dbPaidTrips    = profile.paid_trips || 0;
