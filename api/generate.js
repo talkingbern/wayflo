@@ -46,10 +46,13 @@ export default async function handler(req, res) {
         dbPaidTrips    = profile.paid_trips || 0;
       }
     } catch(e) {
-      console.error("Profile check failed:", e);
+      console.error("Profile check failed:", e.message, e.stack);
     }
 
+    console.log(`Trip limit check for user ${userId}: tripsGenerated=${tripsGenerated}, dbPaidTrips=${dbPaidTrips}`);
+
     if (tripsGenerated >= 3 && dbPaidTrips < 1) {
+      console.log("BLOCKING - payment required");
       return res.status(402).json({ error: "payment_required" });
     }
   }
