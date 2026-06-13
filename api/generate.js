@@ -23,22 +23,26 @@ export default async function handler(req, res) {
           "apikey": supabaseKey,
           "Authorization": `Bearer ${supabaseKey}`,
           "Content-Type": "application/json",
+          "Accept": "application/json",
         }
       });
-      const profiles = await profileRes.json();
+      const profileText = await profileRes.text();
+      console.log(`Profile fetch status=${profileRes.status} body=${profileText}`);
+      const profiles = JSON.parse(profileText);
       const profile  = profiles?.[0];
 
       if (!profile) {
-        await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+        const createRes = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
           method: "POST",
           headers: {
             "apikey": supabaseKey,
             "Authorization": `Bearer ${supabaseKey}`,
             "Content-Type": "application/json",
-            "Prefer": "return=minimal",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
           },
           body: JSON.stringify({ id: userId, trips_generated: 0, paid_trips: 0 }),
         });
+        console.log(`Profile create status=${createRes.status}`);
         tripsGenerated = 0;
         dbPaidTrips = 0;
       } else {
