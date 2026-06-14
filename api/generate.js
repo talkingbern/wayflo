@@ -27,7 +27,6 @@ export default async function handler(req, res) {
         }
       });
       const profileText = await profileRes.text();
-      console.log(`Profile fetch status=${profileRes.status} body=${profileText}`);
       const profiles = JSON.parse(profileText);
       const profile  = profiles?.[0];
 
@@ -42,7 +41,6 @@ export default async function handler(req, res) {
           },
           body: JSON.stringify({ id: userId, trips_generated: 0, paid_trips: 0 }),
         });
-        console.log(`Profile create status=${createRes.status}`);
         tripsGenerated = 0;
         dbPaidTrips = 0;
       } else {
@@ -53,10 +51,8 @@ export default async function handler(req, res) {
       console.error("Profile check failed:", e.message, e.stack);
     }
 
-    console.log(`Trip limit check for user ${userId}: tripsGenerated=${tripsGenerated}, dbPaidTrips=${dbPaidTrips}`);
 
     if (tripsGenerated >= 3 && dbPaidTrips < 1) {
-      console.log("BLOCKING - payment required");
       return res.status(402).json({ error: "payment_required" });
     }
   }
