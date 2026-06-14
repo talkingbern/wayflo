@@ -230,7 +230,7 @@ function PaywallBanner({ onSignIn, onPay, user }) {
       {!user ? (
         <button onClick={onSignIn} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>Sign in to continue</button>
       ) : (
-        <button onClick={onPay} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>Pay $5 and generate</button>
+        <button onClick={onPay} style={{ padding:"0.72rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"8px", color:"#fff", fontSize:"0.9rem", fontWeight:500, cursor:"pointer", fontFamily:"'DM Sans', sans-serif" }}>Pay $2 and generate</button>
       )}
     </div>
   );
@@ -377,13 +377,27 @@ export default function App() {
     if (payment === "success" || payment === "cancelled") {
       if (payment === "success") {
         setPaymentStatus("success");
-        // Don't set paidTrips here — fetchTripStatus will get the real value from DB
-        // after the webhook has credited it. Small delay to allow webhook processing.
-        setTimeout(() => {
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) fetchTripStatus(session.user.id);
-          });
-        }, 2000);
+        // Set paidTrips=1 immediately so user can generate right away
+        setPaidTrips(1);
+        // Also poll DB until webhook credits it (up to 10 seconds)
+        const pollStatus = async (attempts = 0) => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
+            const res = await fetch("/api/trips-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId: session.user.id }),
+            });
+            const data = await res.json();
+            if (data.paid_trips > 0) {
+              setPaidTrips(data.paid_trips);
+            } else if (attempts < 5) {
+              setTimeout(() => pollStatus(attempts + 1), 2000);
+            }
+          } catch(e) {}
+        };
+        setTimeout(() => pollStatus(), 1500);
       }
       else setPaymentStatus("cancelled");
       try {
