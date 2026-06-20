@@ -9,6 +9,13 @@ import { buildBookingLinks } from "./bookingLinks";
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
+// ── FREE MODE ────────────────────────────────────────────────────────────
+// Set VITE_FREE_MODE=true in Vercel env vars to disable the paywall UI.
+// generate.js has its own FREE_MODE env var that bypasses the server-side
+// block — both need to be set together or the UI will promise free trips
+// the backend then rejects.
+const FREE_MODE = String(import.meta.env.VITE_FREE_MODE).toLowerCase() === "true";
+
 const FONT_INJECT = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -54,6 +61,19 @@ const VIBES = [
 const STYLES = ["Solo adventure","Group travel","Slow travel","Fast-paced explorer","Off the beaten path","Digital nomad"];
 const INTERESTS_OPTIONS = ["Street food & markets","Hiking & nature","History & culture","Nightlife","Art & architecture","Beaches","Photography","Volunteering"];
 const BUDGETS = ["$300-500","$500-800","$800-1200","$1200-2000","$2000+"];
+
+const LOADING_MESSAGES = [
+  "Plotting your adventure...",
+  "Scouting hostels near the train station...",
+  "Checking which buses run overnight...",
+  "Sniffing out the tourist traps to skip...",
+  "Pricing street food vs. sit-down meals...",
+  "Mapping the slow route between stops...",
+  "Asking around for the local's version...",
+  "Double-checking those border crossings...",
+  "Working out a realistic daily budget...",
+  "Finding the view that's actually worth the climb...",
+];
 
 function randomDates() {
   const start = new Date(Date.now() + 864e5 * (Math.floor(Math.random() * 60) + 14));
@@ -340,6 +360,7 @@ export default function App() {
   const [error, setError]                   = useState("");
   const [saving, setSaving]                 = useState(false);
   const [saved, setSaved]                   = useState(false);
+  const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const requestInFlight                     = useRef(false);
   const dayRefs                             = useRef({});
 
@@ -426,9 +447,18 @@ export default function App() {
     });
   }, [itinerary]);
 
+  // Rotate loading messages while a generation request is in flight.
+  useEffect(() => {
+    if (phase !== "loading") { setLoadingMsgIndex(0); return; }
+    const interval = setInterval(() => {
+      setLoadingMsgIndex(i => (i + 1) % LOADING_MESSAGES.length);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, [phase]);
+
   async function signOut() { await supabase.auth.signOut(); setTripCount(0); setPaidTrips(0); }
 
-  const isBlocked = tripCount >= 3 && !(user && paidTrips > 0);
+  const isBlocked = !FREE_MODE && tripCount >= 3 && !(user && paidTrips > 0);
 
   async function startCheckout() {
     if (!user) { setShowAuth(true); return; }
@@ -625,6 +655,10 @@ export default function App() {
     </header>
   );
 
+  const footerLabel = FREE_MODE
+    ? "WAYFLO · Free during early access"
+    : "WAYFLO · First trip free · $2/trip after that";
+
   return (
     <>
       <style>{FONT_INJECT}</style>
@@ -637,7 +671,7 @@ export default function App() {
           {landingHeader}
           <LandingPage onGetStarted={()=>setShowLanding(false)} />
           <footer style={{ textAlign:"center", padding:"1.5rem 1rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
-            WAYFLO · First trip free · $2/trip after that
+            {footerLabel}
           </footer>
         </div>
       )}
@@ -652,7 +686,12 @@ export default function App() {
             </div>
             <div style={{ display: showHistory ? "none" : "block" }}>
 
-              {!user && tripCount===0 && phase==="form" && (
+              {FREE_MODE && phase==="form" && (
+                <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.85rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1.1rem" }}>
+                  ✦ Free during early access — generate as many trips as you like
+                </div>
+              )}
+              {!FREE_MODE && !user && tripCount===0 && phase==="form" && (
                 <div style={{ display:"inline-flex", alignItems:"center", gap:"0.4rem", background:"#edf7f1", border:"1px solid #b2d9c3", borderRadius:"999px", padding:"0.3rem 0.85rem", fontSize:"0.75rem", color:"var(--green)", fontWeight:500, marginBottom:"1.1rem" }}>
                   ✦ First 3 itineraries are free — no account needed
                 </div>
@@ -769,9 +808,12 @@ export default function App() {
               {phase==="loading" && (
                 <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"65vh", gap:"1.2rem", animation:"fadeIn 0.3s ease both" }}>
                   <div style={{ width:44, height:44, borderRadius:"50%", border:"3px solid var(--sand)", borderTopColor:"var(--rust)", animation:"spin 0.8s linear infinite" }} />
-                  <div style={{ textAlign:"center" }}>
-                    <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.35rem", fontWeight:700, marginBottom:"0.3rem" }}>Plotting your adventure...</div>
-                    <div style={{ fontSize:"0.82rem", color:"var(--warm-mid)" }}>Finding hidden gems, local spots, and the best routes.</div>
+                  <div style={{ textAlign:"center", minHeight:"3.2rem", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <div
+                      key={loadingMsgIndex}
+                      style={{ fontFamily:"'Playfair Display', serif", fontSize:"1.2rem", fontWeight:700, color:"var(--ink)", animation:"fadeIn 0.4s ease both" }}>
+                      {LOADING_MESSAGES[loadingMsgIndex]}
+                    </div>
                   </div>
                 </div>
               )}
@@ -831,7 +873,7 @@ export default function App() {
             </div>
           </main>
           <footer style={{ textAlign:"center", padding:"2rem 1rem 1.5rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
-            WAYFLO · First trip free · $2/trip after that
+            {footerLabel}
           </footer>
         </>
       )}
