@@ -1,19 +1,14 @@
 // api/generate.js
 export const config = { runtime: "nodejs" };
-
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-
   const apiKey      = process.env.ANTHROPIC_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
   if (!apiKey) return res.status(500).json({ error: "Missing API key." });
-
   const { destination, dateFrom, dateTo, budget, origin, travelStyle, interests, refineFeedback, previousItinerary, userId } = req.body ?? {};
   let dbPaidTrips = 0; // declared at top level so increment section can access it
   if (!destination || !dateFrom || !dateTo || !budget || !travelStyle) return res.status(400).json({ error: "Missing required fields." });
-
   // ── Trip limit enforcement ─────────────────────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
     let tripsGenerated = 0;
@@ -29,7 +24,6 @@ export default async function handler(req, res) {
       const profileText = await profileRes.text();
       const profiles = JSON.parse(profileText);
       const profile  = profiles?.[0];
-
       if (!profile) {
         const createRes = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
           method: "POST",
@@ -50,16 +44,12 @@ export default async function handler(req, res) {
     } catch(e) {
       console.error("Profile check failed:", e.message, e.stack);
     }
-
-
     if (tripsGenerated >= 3 && dbPaidTrips < 1 && process.env.FREE_MODE !== "true") {
-  return res.status(402).json({ error: "payment_required" });
+      return res.status(402).json({ error: "payment_required" });
     }
   }
-
   const tripDays     = Math.round((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
   const isRefinement = Boolean(refineFeedback && previousItinerary);
-
   const systemPrompt = `You are Wayflo, a travel planner built specifically for budget backpackers aged 18-25.
 Your output is ALWAYS a single valid JSON object. NEVER use markdown code fences. No prose before or after the JSON. Start your response with { and end with }.
 
@@ -75,6 +65,12 @@ BACKPACKER PRINCIPLES — apply these throughout every itinerary:
 - DAILY BUDGET: End each day's content with a rough daily spend estimate: "Budget day: ~$25-35 | Mid: ~$45-55"
 - PACING: Don't over-schedule. Two or three real things per day beats six rushed ones. Build in a slow morning or free afternoon where it makes sense.
 
+GEOGRAPHIC CONTINUITY — this is critical, do not skip it:
+- Within a single day, if an activity moves the traveller from one location to another (e.g. a mountain hike, then dinner in a different part of town), explicitly state how they get there: the mode of transport, approximate cost, and approximate time.
+- Never let two bullets in the same day imply teleportation. If bullet 2 is on a mountain and bullet 3 is at a street food stall across town, bullet 2.5 (or part of bullet 3) must say how that move happens.
+- Be specific: "Grab/taxi back to town, ~20 min, ~$3-5" not "head back to town."
+- This applies within a city/region just as much as between cities — a half-day hike followed by an evening market needs the same connective step as a long-distance journey.
+
 TRANSPORT ESTIMATES:
 - Always give price RANGES not single figures. Format: "from ~$X, typically $X-$X booked in advance"
 - Always give time RANGES. Format: "allow X-Xhrs depending on route/stops"
@@ -87,14 +83,12 @@ EVENTS AWARENESS:
 - Only mention events you are confident occur during those dates — do not invent events.
 
 Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each). Tone: honest well-travelled friend, not a travel brochure. No fluff.`;
-
   const tripContext = `Destination: ${destination}
 ${origin ? "Travelling from: " + origin : ""}
 Dates: ${dateFrom} to ${dateTo} (${tripDays} days)
 Total budget: ${budget}
 Travel style: ${travelStyle}
 Interests: ${Array.isArray(interests) ? interests.join(", ") : interests || "general"}`;
-
   const freshPrompt = `Generate a day-by-day backpacker itinerary.
 ${tripContext}
 
@@ -103,6 +97,7 @@ BACKPACKER LOGIC FOR THIS TRIP:
 - Flag any days where costs will spike (festivals, peak season, expensive cities) so the traveller can plan ahead
 - If the destination has a clear "tourist centre" vs "where locals/backpackers actually go", route toward the latter
 - Suggest the cheapest realistic way to get from ${origin || "origin"} to ${destination} and back
+- Within each day, make sure every location-to-location move is explicitly narrated per the GEOGRAPHIC CONTINUITY rules
 
 Return a single JSON object in exactly this format — no markdown, no preamble, start with {:
 
@@ -130,14 +125,10 @@ Return a single JSON object in exactly this format — no markdown, no preamble,
 }
 
 Include Day 0 (Getting There), one entry per full day (Day 1 through Day ${tripDays}), and a final Getting Home entry. Real place names only. Each day ends with a daily budget estimate line.`;
-
   const refinePrompt = `Update this itinerary based on feedback: ${refineFeedback}
-
 Original trip: ${tripContext}
 Previous itinerary: ${previousItinerary}
-
 Return only the updated JSON in the same format. No markdown fences.`;
-
   let anthropicRes;
   try {
     anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -157,7 +148,6 @@ Return only the updated JSON in the same format. No markdown fences.`;
   } catch(e) {
     return res.status(502).json({ error: "Could not reach AI service." });
   }
-
   if (!anthropicRes.ok) {
     const err = await anthropicRes.text();
     console.error("Anthropic error:", anthropicRes.status, err);
@@ -169,10 +159,8 @@ Return only the updated JSON in the same format. No markdown fences.`;
     }
     return res.status(502).json({ error: "AI service error: " + anthropicRes.status });
   }
-
   const data    = await anthropicRes.json();
   const rawText = (data.content ?? []).map(b => b.text ?? "").join("");
-
   // ── Update counters for logged-in users ──────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
     // Increment trips_generated via RPC
@@ -185,7 +173,6 @@ Return only the updated JSON in the same format. No markdown fences.`;
       },
       body: JSON.stringify({ user_id: userId }),
     }).catch(() => {});
-
     // If this was a paid trip, decrement paid_trips
     if (dbPaidTrips > 0) {
       await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}`, {
@@ -200,6 +187,5 @@ Return only the updated JSON in the same format. No markdown fences.`;
       }).catch(() => {});
     }
   }
-
   return res.status(200).json({ raw: rawText });
 }
