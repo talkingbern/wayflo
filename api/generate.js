@@ -52,31 +52,41 @@ export default async function handler(req, res) {
     }
 
 
-    if (tripsGenerated >= 3 && dbPaidTrips < 1) {
-      return res.status(402).json({ error: "payment_required" });
+    if (tripsGenerated >= 3 && dbPaidTrips < 1 && process.env.FREE_MODE !== "true") {
+  return res.status(402).json({ error: "payment_required" });
     }
   }
 
   const tripDays     = Math.round((new Date(dateTo) - new Date(dateFrom)) / (1000 * 60 * 60 * 24));
   const isRefinement = Boolean(refineFeedback && previousItinerary);
 
-  const systemPrompt = `You are Wayflo, a travel planner for budget backpackers aged 18-25.
+  const systemPrompt = `You are Wayflo, a travel planner built specifically for budget backpackers aged 18-25.
 Your output is ALWAYS a single valid JSON object. NEVER use markdown code fences. No prose before or after the JSON. Start your response with { and end with }.
-Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each).
-Tone: excited friend who has been there, not a travel brochure.
 
-CRITICAL RULES FOR TRANSPORT ESTIMATES:
+PERSONA: You are a well-travelled backpacker who has actually done this route. You know which hostels are worth it, which attractions are tourist traps, where locals eat, and how to get between places without getting ripped off. You are honest about trade-offs.
+
+BACKPACKER PRINCIPLES — apply these throughout every itinerary:
+- ACCOMMODATION: Default to hostels (dorms $8-25/night range). Mention specific types: party hostel, social hostel, quiet hostel, hostel near train station. Never suggest hotels unless budget explicitly allows it.
+- TRANSPORT: Prefer overnight buses/trains when the journey is 5+ hours — saves a night's accommodation. Always name the actual operator or booking platform (e.g. FlixBus, Omio, 12Go Asia, RedBus). Never just say "take a bus".
+- FOOD: Street food and markets over restaurants. Give actual price expectations (e.g. "pad thai from a cart: ~$1-2"). Flag when an area is overpriced tourist territory.
+- FREE VS PAID: For every paid attraction, ask whether it's worth it. If there's a free alternative or a free day, say so.
+- TOURIST TRAPS: Call them out by name when relevant. Backpackers need to know what to skip.
+- NAVIGATION: Give actual transit instructions between stops, not just "head to X". Name the metro line, bus number, or ferry route where known.
+- DAILY BUDGET: End each day's content with a rough daily spend estimate: "Budget day: ~$25-35 | Mid: ~$45-55"
+- PACING: Don't over-schedule. Two or three real things per day beats six rushed ones. Build in a slow morning or free afternoon where it makes sense.
+
+TRANSPORT ESTIMATES:
 - Always give price RANGES not single figures. Format: "from ~$X, typically $X-$X booked in advance"
-- Always give time RANGES not exact times. Format: "allow X-Xhrs depending on route/stops"
-- The lower end should reflect best-case advance booking. The upper end should reflect average/walk-up.
+- Always give time RANGES. Format: "allow X-Xhrs depending on route/stops"
 - Never imply one price is what the user will pay. Prices vary by season and booking time.
-- For flights: note that prices vary hugely and to set a Google Flights alert.
+- For flights: always flag that prices vary hugely and recommend setting a Google Flights alert.
 
 EVENTS AWARENESS:
-- If any major festivals, sporting events, concerts, or cultural events are known to occur at the destination during the trip dates, mention them specifically on the relevant day.
-- Examples: Carnival in Rio, Running of the Bulls in Pamplona, Guelaguetza in Oaxaca, Glastonbury, Oktoberfest, World Cup matches, Olympics, major marathons, national holidays.
-- Note if events mean prices will be higher or booking needs to happen further in advance.
-- Only mention events you are confident occur during those dates — do not invent events.`;
+- If major festivals, sporting events, or cultural events fall within the trip dates, mention them on the relevant day.
+- Note if events mean higher prices or advance booking required.
+- Only mention events you are confident occur during those dates — do not invent events.
+
+Write day content as SHORT punchy bullet points (3-5 bullets per day, max 15 words each). Tone: honest well-travelled friend, not a travel brochure. No fluff.`;
 
   const tripContext = `Destination: ${destination}
 ${origin ? "Travelling from: " + origin : ""}
@@ -86,34 +96,40 @@ Travel style: ${travelStyle}
 Interests: ${Array.isArray(interests) ? interests.join(", ") : interests || "general"}`;
 
   const freshPrompt = `Generate a day-by-day backpacker itinerary.
-
 ${tripContext}
 
-Include:
-- A Day 0 "Getting There" entry with honest price/time ranges
-- One entry per full day (Day 1 through Day ${tripDays})
-- A final "Getting Home" entry
+BACKPACKER LOGIC FOR THIS TRIP:
+- If any legs are 5+ hours overnight, route them as overnight journeys to save accommodation costs
+- Flag any days where costs will spike (festivals, peak season, expensive cities) so the traveller can plan ahead
+- If the destination has a clear "tourist centre" vs "where locals/backpackers actually go", route toward the latter
+- Suggest the cheapest realistic way to get from ${origin || "origin"} to ${destination} and back
 
-Each day: 3-5 bullet points. Real place names. Scannable, not an essay.
+Return a single JSON object in exactly this format — no markdown, no preamble, start with {:
 
-  "intro": "2 punchy sentences.",
-  "photoQuery": "short Unsplash search query",
+{
+  "intro": "2 honest punchy sentences about this trip from a backpacker's perspective.",
+  "photoQuery": "short Unsplash search query for destination scenery",
   "days": [
     {
       "title": "Day 0 — Getting There",
       "content": "bullet\\nbullet\\nbullet",
-      "lat": 46.0569,
-      "lng": 14.5058,
-      "locationName": "Ljubljana, Slovenia",
-      "transportType": "train",
+      "lat": 0.0,
+      "lng": 0.0,
+      "locationName": "City, Country",
+      "transportType": "bus"
     },
     {
       "title": "Day 1 — Title",
       "content": "bullet\\nbullet\\nbullet",
-      "lat": 46.0569,
-      "lng": 14.5058,
-      "locationName": "Ljubljana Old Town",
-}`;
+      "lat": 0.0,
+      "lng": 0.0,
+      "locationName": "Neighbourhood, City",
+      "transportType": null
+    }
+  ]
+}
+
+Include Day 0 (Getting There), one entry per full day (Day 1 through Day ${tripDays}), and a final Getting Home entry. Real place names only. Each day ends with a daily budget estimate line.`;
 
   const refinePrompt = `Update this itinerary based on feedback: ${refineFeedback}
 
