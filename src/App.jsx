@@ -161,7 +161,172 @@ function getDayDisplayNumber(title, index) {
   return String(index).padStart(2,"0");
 }
 
-function DayCard({ day, index, photo, dayRef }) {
+const NOTE_CATEGORIES = [
+  { id:"closed",       label:"Closed",       icon:"🚫" },
+  { id:"price_change", label:"Price change", icon:"💲" },
+  { id:"safety",       label:"Safety",       icon:"⚠️" },
+  { id:"tip",          label:"Tip",          icon:"💡" },
+  { id:"other",        label:"Other",        icon:"📝" },
+];
+
+function categoryMeta(id) {
+  return NOTE_CATEGORIES.find(c=>c.id===id) || NOTE_CATEGORIES[3];
+}
+
+function NoteCard({ note, user, onVote }) {
+  const meta = categoryMeta(note.category);
+  const [voting, setVoting] = useState(false);
+
+  async function vote(v) {
+    if (!user) return;
+    setVoting(true);
+    await onVote(note.id, v);
+    setVoting(false);
+  }
+
+  return (
+    <div style={{ background:"var(--paper)", border:"1px solid var(--sand)", borderRadius:"8px", padding:"0.7rem 0.85rem" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", gap:"0.5rem", marginBottom:"0.4rem" }}>
+        <span style={{ fontSize:"0.95rem", flexShrink:0 }}>{meta.icon}</span>
+        <span style={{ fontSize:"0.82rem", color:"var(--ink-soft)", lineHeight:1.5 }}>{note.body}</span>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
+        <button type="button" disabled={voting} onClick={()=>vote("helpful")}
+          style={{ display:"flex", alignItems:"center", gap:"0.25rem", background:"none", border:"none", cursor:voting?"default":"pointer", fontSize:"0.72rem", color:"var(--green)", padding:0, fontFamily:"'DM Sans', sans-serif" }}>
+          👍 {note.helpful_count}
+        </button>
+        <button type="button" disabled={voting} onClick={()=>vote("outdated")}
+          style={{ display:"flex", alignItems:"center", gap:"0.25rem", background:"none", border:"none", cursor:voting?"default":"pointer", fontSize:"0.72rem", color:"var(--rust-dk)", padding:0, fontFamily:"'DM Sans', sans-serif" }}>
+          ⚠️ {note.outdated_count} outdated
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddNoteForm({ onSubmit, onCancel }) {
+  const [category, setCategory] = useState("tip");
+  const [body, setBody]         = useState("");
+  const [posting, setPosting]   = useState(false);
+
+  async function submit() {
+    if (!body.trim() || posting) return;
+    setPosting(true);
+    await onSubmit({ category, body: body.trim() });
+    setPosting(false);
+    setBody("");
+  }
+
+  return (
+    <div style={{ background:"var(--white)", border:"1px dashed var(--sand)", borderRadius:"8px", padding:"0.75rem" }}>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:"0.35rem", marginBottom:"0.6rem" }}>
+        {NOTE_CATEGORIES.map(c=>(
+          <Chip key={c.id} label={c.icon+" "+c.label} selected={category===c.id} onClick={()=>setCategory(c.id)} />
+        ))}
+      </div>
+      <FocusInput as="textarea" rows={2} placeholder="e.g. Hostel closed for renovation as of June 2026..."
+        value={body} onChange={e=>setBody(e.target.value)}
+        style={{ resize:"none", fontSize:"0.84rem", marginBottom:"0.55rem" }} maxLength={500} />
+      <div style={{ display:"flex", gap:"0.5rem" }}>
+        <button type="button" onClick={onCancel}
+          style={{ flex:1, padding:"0.5rem", background:"transparent", border:"1.5px solid var(--sand)", borderRadius:"7px", fontSize:"0.78rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
+          Cancel
+        </button>
+        <button type="button" onClick={submit} disabled={!body.trim()||posting}
+          style={{ flex:2, padding:"0.5rem", background:(!body.trim()||posting)?"var(--sand)":"var(--rust)", border:"none", borderRadius:"7px", fontSize:"0.78rem", fontWeight:500, cursor:(!body.trim()||posting)?"not-allowed":"pointer", color:(!body.trim()||posting)?"var(--warm-mid)":"#fff", fontFamily:"'DM Sans', sans-serif" }}>
+          {posting?"Posting...":"Post note"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NotesSection({ day, destination, user, onRequireAuth }) {
+  const [open, setOpen]         = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [notes, setNotes]       = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [error, setError]       = useState("");
+
+  async function fetchNotes() {
+    if (day.lat==null || day.lng==null) return;
+    setLoading(true); setError("");
+    try {
+      const params = new URLSearchParams({ lat:day.lat, lng:day.lng, locationName: day.locationName||"" });
+      const res = await fetch("/api/notes?"+params.toString());
+      const data = await res.json();
+      setNotes(data.notes||[]);
+    } catch(e) { setError("Couldn't load notes."); }
+    setLoading(false);
+  }
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && notes===null) fetchNotes();
+  }
+
+  async function handleVote(noteId, vote) {
+    try {
+      await fetch("/api/notes", {
+        method:"PATCH", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ userId:user.id, noteId, vote }),
+      });
+      fetchNotes();
+    } catch(e) {}
+  }
+
+  async function handleSubmitNote({ category, body }) {
+    try {
+      const res = await fetch("/api/notes", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          userId:user.id, locationName: day.locationName||day.title,
+          destination, lat:day.lat, lng:day.lng, category, body,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setShowForm(false);
+      fetchNotes();
+    } catch(e) { setError("Couldn't post note. Try again."); }
+  }
+
+  if (day.lat==null || day.lng==null) return null;
+
+  return (
+    <div style={{ borderTop:"1px solid var(--sand)", marginTop: "0.9rem", paddingTop:"0.75rem" }}>
+      <button type="button" onClick={toggle}
+        style={{ display:"flex", alignItems:"center", gap:"0.4rem", background:"none", border:"none", cursor:"pointer", fontSize:"0.78rem", color:"var(--ink-soft)", fontWeight:500, padding:0, fontFamily:"'DM Sans', sans-serif" }}>
+        <span style={{ transform: open?"rotate(90deg)":"none", transition:"transform 0.15s", display:"inline-block", fontSize:"0.7rem" }}>▸</span>
+        💬 Notes
+      </button>
+
+      {open && (
+        <div style={{ marginTop:"0.7rem", display:"flex", flexDirection:"column", gap:"0.55rem", animation:"fadeIn 0.25s ease both" }}>
+          {loading && <div style={{ fontSize:"0.78rem", color:"var(--warm-mid)", display:"flex", alignItems:"center", gap:"0.4rem" }}><Spinner size={12} color="var(--warm-mid)" />Loading notes...</div>}
+          {!loading && notes && notes.length===0 && !showForm && (
+            <div style={{ fontSize:"0.78rem", color:"var(--warm-mid)" }}>No notes yet — be the first to leave one.</div>
+          )}
+          {!loading && notes && notes.map(n=>(
+            <NoteCard key={n.id} note={n} user={user} onVote={handleVote} />
+          ))}
+          {error && <div style={{ fontSize:"0.76rem", color:"var(--rust-dk)" }}>{error}</div>}
+
+          {!showForm ? (
+            <button type="button" onClick={()=>{ if(!user){ onRequireAuth(); return; } setShowForm(true); }}
+              style={{ alignSelf:"flex-start", background:"none", border:"1.5px solid var(--sand)", borderRadius:"7px", padding:"0.4rem 0.8rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--rust)", fontFamily:"'DM Sans', sans-serif", fontWeight:500 }}>
+              + Add a note
+            </button>
+          ) : (
+            <AddNoteForm onSubmit={handleSubmitNote} onCancel={()=>setShowForm(false)} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DayCard({ day, index, photo, dayRef, destination, user, onRequireAuth }) {
   const bullets      = day.content.split("\n").map(l=>l.replace(/^[*\-•] ?/,"").trim()).filter(Boolean);
   const cleanTitle   = day.title.replace(/^Day \d+\s*[-—]\s*/,"");
   const displayNum   = getDayDisplayNumber(day.title, index);
@@ -205,6 +370,7 @@ function DayCard({ day, index, photo, dayRef }) {
             ))}
           </div>
         )}
+        <NotesSection day={day} destination={destination} user={user} onRequireAuth={onRequireAuth} />
       </div>
     </div>
   );
@@ -846,7 +1012,8 @@ export default function App() {
 
                   <div style={{ display:"flex", flexDirection:"column", gap:"0.85rem", marginBottom:"1.75rem" }}>
                     {itinerary.days.map((day,i)=>(
-                      <DayCard key={i} day={day} index={i} photo={dayPhotos[i]} dayRef={el=>{ dayRefs.current[i]=el; }} />
+                      <DayCard key={i} day={day} index={i} photo={dayPhotos[i]} dayRef={el=>{ dayRefs.current[i]=el; }}
+                        destination={destination} user={user} onRequireAuth={()=>setShowAuth(true)} />
                     ))}
                   </div>
 

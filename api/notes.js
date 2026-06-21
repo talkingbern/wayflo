@@ -67,9 +67,16 @@ export default async function handler(req, res) {
       // Drop notes the community has flagged as outdated
       notes = notes.filter(n => !(n.outdated_count >= 3 && n.outdated_count > n.helpful_count));
 
-      // Rank: exact/partial name match first, then just-nearby
-      notes.sort((a, b) => nameSimilarity(targetNormalized, b.location_name_normalized) -
-                            nameSimilarity(targetNormalized, a.location_name_normalized));
+      // Rank: name match first (exact > partial > nearby-only), then by helpful votes within each tier
+      notes.sort((a, b) => {
+        const simA = nameSimilarity(targetNormalized, a.location_name_normalized);
+        const simB = nameSimilarity(targetNormalized, b.location_name_normalized);
+        if (simB !== simA) return simB - simA;
+        return (b.helpful_count - b.outdated_count) - (a.helpful_count - a.outdated_count);
+      });
+
+      // Cap at 3 — best-ranked notes only, keeps the UI compact
+      notes = notes.slice(0, 3);
 
       return res.status(200).json({ notes });
     } catch(e) {
