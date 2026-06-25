@@ -32,7 +32,7 @@ function flightLink(from, to, date) {
   if (!from || !to) return null;
   const query = `Flights from ${cityName(from)} to ${cityName(to)}${date ? " on " + fmt(date) : ""}`;
   return {
-    label: "Search flights on Google Flights",
+    label: "Search flights — prices vary, confirm before booking",
     url: `https://www.google.com/travel/flights?q=${encodeURIComponent(query)}`,
   };
 }
@@ -42,7 +42,7 @@ function trainLink(from, to) {
   const f = cityName(from).toLowerCase().replace(/\s+/g, "-");
   const t = cityName(to).toLowerCase().replace(/\s+/g, "-");
   return {
-    label: "Book train on Trainline",
+    label: "Search trains on Trainline — confirm final price",
     url: `https://www.trainline.com/search/${encodeURIComponent(f)}/${encodeURIComponent(t)}`,
   };
 }
@@ -63,7 +63,7 @@ function rome2rioLink(from, to) {
   const f = encodeURIComponent(cityName(from));
   const t = encodeURIComponent(cityName(to));
   return {
-    label: `Search routes on Rome2Rio`,
+    label: `Search routes on Rome2Rio — prices are estimates only`,
     url: `https://www.rome2rio.com/s/${f}/${t}`,
   };
 }
@@ -99,7 +99,7 @@ function hostelLink(city, dateFrom, dateTo) {
     no_rooms: "1",
   });
   return {
-    label: `Find accommodation in ${c} on Booking.com`,
+    label: `Search hostels in ${c} on Booking.com`,
     url: `https://www.booking.com/searchresults.html?${params.toString()}`,
   };
 }
@@ -115,7 +115,7 @@ function hotelLink(city, dateFrom, dateTo) {
     no_rooms: "1",
   });
   return {
-    label: `Browse accommodation on Booking.com`,
+    label: `Search accommodation in ${c} on Booking.com`,
     url: `https://www.booking.com/searchresults.html?${params.toString()}`,
   };
 }
@@ -158,7 +158,7 @@ export function buildBookingLinks(day, { origin, destination, dateFrom, dateTo }
       }
       // Offer flight as alternative
       const flight = flightLink(from, to, date);
-      if (flight) links.push({ ...flight, label: "Or search flights" });
+      if (flight) links.push({ ...flight, label: "Or search flights — prices vary" });
     } else if (isFerry) {
       const link = ferryLink(from, to);
       if (link) links.push(link);
