@@ -49,6 +49,116 @@ const FONT_INJECT = `
   @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
 `;
 
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+// Smart defaults applied when destination is selected and Step 2 expands
+const SMART_DEFAULTS = { budget:"$500-800", travelStyle:"Solo adventure", interests:["Street food & markets","Hiking & nature"] };
+
+function DestinationMapInput({ value, onChange }) {
+  const mapContainer = useRef(null);
+  const mapRef       = useRef(null);
+  const markerRef    = useRef(null);
+  const [search, setSearch]         = useState(value||"");
+  const [results, setResults]       = useState([]);
+  const [searching, setSearching]   = useState(false);
+  const searchTimeout                = useRef(null);
+
+  // Init map once
+  useEffect(() => {
+    if (!MAPBOX_TOKEN || mapRef.current) return;
+    import("mapbox-gl").then(({ default: mapboxgl }) => {
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      const map = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/light-v11",
+        center: [20, 20],
+        zoom: 1.4,
+        projection: "mercator",
+        attributionControl: false,
+      });
+      map.addControl(new mapboxgl.AttributionControl({ compact: true }));
+      map.on("click", async (e) => {
+        const { lng, lat } = e.lngLat;
+        placeMarker(map, mapboxgl, lng, lat);
+        try {
+          const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,region,country&access_token=${MAPBOX_TOKEN}`);
+          const d = await r.json();
+          const name = d.features?.[0]?.place_name || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+          setSearch(name);
+          setResults([]);
+          onChange(name, { lat, lng });
+        } catch(e) {}
+      });
+      mapRef.current = map;
+    });
+    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+  }, []);
+
+  function placeMarker(map, mapboxgl, lng, lat) {
+    if (markerRef.current) markerRef.current.remove();
+    const el = document.createElement("div");
+    el.style.cssText = "width:14px;height:14px;background:var(--rust);border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(196,98,45,0.5)";
+    markerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    map.flyTo({ center: [lng, lat], zoom: 5, duration: 1000 });
+  }
+
+  async function handleSearchInput(val) {
+    setSearch(val);
+    onChange(val, null); // coords unknown until a result is selected
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    if (!val.trim() || val.length < 2) { setResults([]); return; }
+    searchTimeout.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(val)}.json?types=place,region,country&limit=5&access_token=${MAPBOX_TOKEN}`);
+        const d = await r.json();
+        setResults(d.features || []);
+      } catch(e) { setResults([]); }
+      setSearching(false);
+    }, 350);
+  }
+
+  async function selectResult(feature) {
+    const name = feature.place_name;
+    const [lng, lat] = feature.center;
+    setSearch(name); setResults([]);
+    onChange(name, { lat, lng });
+    if (mapRef.current) {
+      const { default: mapboxgl } = await import("mapbox-gl");
+      placeMarker(mapRef.current, mapboxgl, lng, lat);
+    }
+  }
+
+  return (
+    <div style={{ position:"relative" }}>
+      {/* Search bar */}
+      <div style={{ position:"relative", marginBottom:"0.65rem" }}>
+        <input
+          type="text" placeholder="Search a destination or click the map..."
+          value={search} onChange={e=>handleSearchInput(e.target.value)}
+          style={{ ...inputBase, paddingLeft:"2.4rem" }} />
+        <span style={{ position:"absolute", left:"0.85rem", top:"50%", transform:"translateY(-50%)", fontSize:"1rem", pointerEvents:"none" }}>🔍</span>
+        {searching && <span style={{ position:"absolute", right:"0.85rem", top:"50%", transform:"translateY(-50%)" }}><Spinner size={12} color="var(--warm-mid)" /></span>}
+      </div>
+      {/* Autocomplete dropdown */}
+      {results.length > 0 && (
+        <div style={{ position:"absolute", top:"calc(100% - 0.65rem)", left:0, right:0, background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"8px", zIndex:50, overflow:"hidden", boxShadow:"0 4px 16px rgba(26,21,16,0.1)" }}>
+          {results.map(f=>(
+            <button key={f.id} type="button" onClick={()=>selectResult(f)}
+              style={{ display:"block", width:"100%", textAlign:"left", padding:"0.65rem 1rem", background:"none", border:"none", borderBottom:"1px solid var(--sand)", cursor:"pointer", fontSize:"0.84rem", color:"var(--ink)", fontFamily:"'DM Sans', sans-serif" }}
+              onMouseOver={e=>e.currentTarget.style.background="var(--paper)"}
+              onMouseOut={e=>e.currentTarget.style.background="none"}>
+              📍 {f.place_name}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Map */}
+      <div ref={mapContainer} style={{ width:"100%", height:250, borderRadius:"10px", overflow:"hidden", border:"1.5px solid var(--sand)" }} />
+    </div>
+  );
+}
+
 const VIBES = [
   { id:"adventure", label:"Adventure", icon:"🏔️", desc:"Hiking, wild camping, off-grid" },
   { id:"culture",   label:"Culture",   icon:"🏛️", desc:"History, art, local life" },
@@ -509,6 +619,8 @@ export default function App() {
   const [paidTrips, setPaidTrips]         = useState(0);
 
   const [destination, setDestination]       = useState("");
+  const [destCoords, setDestCoords]         = useState(null);
+  const [step2Open, setStep2Open]           = useState(false);
   const [origin, setOrigin]                 = useState("");
   const [dateFrom, setDateFrom]             = useState("");
   const [dateTo, setDateTo]                 = useState("");
@@ -529,6 +641,20 @@ export default function App() {
   const [loadingMsgIndex, setLoadingMsgIndex] = useState(0);
   const requestInFlight                     = useRef(false);
   const dayRefs                             = useRef({});
+
+  function handleDestinationSelect(name, coords) {
+    setDestination(name);
+    if (coords) setDestCoords(coords);
+    if (name.trim()) {
+      // Apply smart defaults only if user hasn't already set these
+      if (!budget) setBudget(SMART_DEFAULTS.budget);
+      if (!travelStyle) setTravelStyle(SMART_DEFAULTS.travelStyle);
+      if (!interests.length) setInterests(SMART_DEFAULTS.interests);
+      setStep2Open(true);
+    } else {
+      setStep2Open(false);
+    }
+  }
 
   async function fetchTripStatus(userId) {
     try {
@@ -761,7 +887,7 @@ export default function App() {
         </div>
         <nav style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
           {phase==="result" && !showHistory && (
-            <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); setDestination(""); setOrigin(""); setDateFrom(""); setDateTo(""); setBudget(""); setTravelStyle(""); setInterests([]); setSaved(false); }}
+            <button onClick={()=>{ setPhase("form"); setItinerary(null); setError(""); setDestination(""); setDestCoords(null); setStep2Open(false); setOrigin(""); setDateFrom(""); setDateTo(""); setBudget(""); setTravelStyle(""); setInterests([]); setSaved(false); }}
               style={{ background:"none", border:"1.5px solid var(--sand)", borderRadius:"6px", padding:"0.4rem 0.9rem", fontSize:"0.76rem", cursor:"pointer", color:"var(--warm-mid)", fontFamily:"'DM Sans', sans-serif" }}>
               ← New trip
             </button>
@@ -876,96 +1002,126 @@ export default function App() {
               {/* FORM */}
               {phase==="form" && (
                 <div style={{ animation:"fadeUp 0.4s ease both" }}>
-                  <div style={{ marginBottom:"1.75rem" }}>
-                    <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.8rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.5rem", color:"var(--ink)" }}>
+                  <div style={{ marginBottom:"1.5rem" }}>
+                    <h1 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.9rem,7vw,2.8rem)", fontWeight:900, lineHeight:1.1, marginBottom:"0.4rem", color:"var(--ink)" }}>
                       Where are you<br /><span style={{ color:"var(--rust)" }}>running off to?</span>
                     </h1>
-                    <p style={{ fontSize:"0.87rem", color:"var(--warm-mid)", lineHeight:1.6 }}>Five questions. One perfect backpacker itinerary.</p>
-                  </div>
-
-                  <div style={{ display:"flex", alignItems:"center", gap:"1rem", marginBottom:"1.5rem" }}>
-                    <div style={{ flex:1, height:1, background:"var(--sand)" }} />
-                    <button onClick={()=>setShowInspire(true)}
-                      style={{ padding:"0.5rem 1.1rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"999px", fontSize:"0.82rem", cursor:"pointer", color:"var(--ink-soft)", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", gap:"0.4rem", whiteSpace:"nowrap", transition:"border-color 0.15s, box-shadow 0.15s", fontWeight:500 }}
-                      onMouseOver={e=>{ e.currentTarget.style.borderColor="var(--rust)"; e.currentTarget.style.boxShadow="0 2px 8px rgba(196,98,45,0.15)"; }}
-                      onMouseOut={e=>{ e.currentTarget.style.borderColor="var(--sand)"; e.currentTarget.style.boxShadow="none"; }}>
-                      ✨ Inspire me
-                    </button>
-                    <div style={{ flex:1, height:1, background:"var(--sand)" }} />
+                    <div style={{ display:"flex", alignItems:"center", gap:"0.75rem", marginTop:"0.85rem" }}>
+                      <p style={{ fontSize:"0.87rem", color:"var(--warm-mid)", lineHeight:1.6, margin:0 }}>Pick a destination to get started.</p>
+                      <button onClick={()=>setShowInspire(true)}
+                        style={{ flexShrink:0, padding:"0.35rem 0.85rem", background:"var(--white)", border:"1.5px solid var(--sand)", borderRadius:"999px", fontSize:"0.78rem", cursor:"pointer", color:"var(--ink-soft)", fontFamily:"'DM Sans', sans-serif", display:"flex", alignItems:"center", gap:"0.35rem", transition:"border-color 0.15s", fontWeight:500, whiteSpace:"nowrap" }}
+                        onMouseOver={e=>e.currentTarget.style.borderColor="var(--rust)"}
+                        onMouseOut={e=>e.currentTarget.style.borderColor="var(--sand)"}>
+                        ✨ Inspire me
+                      </button>
+                    </div>
                   </div>
 
                   {isBlocked && <PaywallBanner onSignIn={()=>setShowAuth(true)} onPay={startCheckout} user={user} />}
 
-                  <FieldCard number={1} icon="📍" label="Destination" hint="City, country, or region"
-                    action={<DiceBtn onClick={()=>{ if(budget||travelStyle||interests.length){ setShowInspire(true); } else { const p=["Bangkok, Thailand","Hanoi, Vietnam","Bali, Indonesia","Chiang Mai, Thailand","Ho Chi Minh City, Vietnam","Luang Prabang, Laos","Phnom Penh, Cambodia","Kuala Lumpur, Malaysia","Flores, Indonesia","Lisbon, Portugal","Budapest, Hungary","Split, Croatia","Sarajevo, Bosnia","Tbilisi, Georgia","Porto, Portugal","Krakow, Poland","Riga, Latvia","Kotor, Montenegro","Tirana, Albania","Sofia, Bulgaria","Ljubljana, Slovenia","Belgrade, Serbia","Kutaisi, Georgia","Medellin, Colombia","Oaxaca, Mexico","Cartagena, Colombia","La Paz, Bolivia","Cusco, Peru","Mexico City, Mexico","Buenos Aires, Argentina","Valparaiso, Chile","San Jose, Costa Rica","Antigua, Guatemala","Marrakech, Morocco","Cape Town, South Africa","Nairobi, Kenya","Amman, Jordan","Kathmandu, Nepal","Pokhara, Nepal","New Orleans, USA"]; setDestination(p[Math.floor(Math.random()*p.length)]); }}} title="Random destination" />}>
-                    <FocusInput type="text" placeholder="e.g. Hanoi, Vietnam or Southeast Asia" value={destination} onChange={e=>setDestination(e.target.value)} />
-                  </FieldCard>
-
-                  <FieldCard number={2} icon="🛫" label="Travelling from" hint="Helps estimate travel costs from your starting point"
-                    action={<DiceBtn onClick={()=>{ const o=["New York, USA","London, UK","Sydney, Australia","Toronto, Canada","Berlin, Germany","Sao Paulo, Brazil"]; setOrigin(o[Math.floor(Math.random()*o.length)]); }} title="Random origin" />}>
-                    <FocusInput type="text" placeholder="Your departure city, e.g. New York" value={origin} onChange={e=>setOrigin(e.target.value)} />
-                  </FieldCard>
-
-                  <FieldCard number={3} icon="📅" label="Travel Dates" hint="When are you going?"
-                    action={<DiceBtn onClick={randomDatesSet} title="Random dates" />}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.65rem" }}>
-                      <div>
-                        <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>From</div>
-                        <FocusInput type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>To</div>
-                        <FocusInput type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
-                      </div>
+                  {/* ── STEP 1: Destination map + dates ── */}
+                  <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"14px", padding:"1.25rem", marginBottom:"0.85rem" }}>
+                    <div style={{ fontSize:"0.62rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.85rem" }}>
+                      Where to?
                     </div>
-                  </FieldCard>
+                    <DestinationMapInput
+                      value={destination}
+                      onChange={(name, coords) => handleDestinationSelect(name, coords || null)}
+                    />
 
-                  <FieldCard number={4} icon="💰" label="Total Trip Budget" hint="Everything — flights, accommodation, food, activities"
-                    action={<DiceBtn onClick={()=>setBudget(BUDGETS[Math.floor(Math.random()*BUDGETS.length)])} title="Random budget" />}>
-                    <SelectInput value={budget} onChange={e=>setBudget(e.target.value)}>
-                      <option value="">Select a budget range</option>
-                      {BUDGETS.map(b=><option key={b}>{b}</option>)}
-                    </SelectInput>
-                  </FieldCard>
-
-                  <FieldCard number={5} icon="🧭" label="Travel Style" hint="How do you like to move through a place?"
-                    action={<DiceBtn onClick={()=>setTravelStyle(STYLES[Math.floor(Math.random()*STYLES.length)])} title="Random style" />}>
-                    <SelectInput
-                      value={STYLES.includes(travelStyle)||travelStyle===""?travelStyle:"__custom__"}
-                      onChange={e=>{ if(e.target.value==="__custom__") setTravelStyle("__custom__"); else setTravelStyle(e.target.value); }}>
-                      <option value="">Choose your style</option>
-                      {STYLES.map(s=><option key={s}>{s}</option>)}
-                      <option value="__custom__">Describe my own style...</option>
-                    </SelectInput>
-                    {travelStyle==="__custom__" && (
-                      <FocusInput as="textarea" rows={2}
-                        placeholder="e.g. I like getting lost in local neighbourhoods, avoiding tourist traps..."
-                        value="" onChange={e=>setTravelStyle(e.target.value)}
-                        style={{ marginTop:"0.5rem", resize:"none", fontSize:"0.88rem", lineHeight:1.5 }} />
+                    {/* Dates — shown once destination is set */}
+                    {destination && (
+                      <div style={{ marginTop:"1rem", animation:"fadeIn 0.25s ease both" }}>
+                        <div style={{ fontSize:"0.62rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.65rem", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          When?
+                          <DiceBtn onClick={randomDatesSet} title="Random dates" />
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.65rem" }}>
+                          <div>
+                            <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>From</div>
+                            <FocusInput type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize:"0.7rem", color:"var(--warm-mid)", marginBottom:"0.3rem" }}>To</div>
+                            <FocusInput type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </FieldCard>
+                  </div>
 
-                  <FieldCard number={6} icon="❤️" label="Interests" hint="What makes a trip worth it for you?">
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:"0.45rem", marginBottom:"0.65rem" }}>
-                      {INTERESTS_OPTIONS.map(item=><Chip key={item} label={item} selected={interests.includes(item)} onClick={()=>toggleInterest(item)} />)}
-                      {interests.filter(i=>!INTERESTS_OPTIONS.includes(i)).map(i=><Chip key={i} label={i} selected={true} onClick={()=>toggleInterest(i)} />)}
+                  {/* ── STEP 2: Budget, style, interests (auto-expands) ── */}
+                  {step2Open && (
+                    <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"14px", padding:"1.25rem", marginBottom:"0.85rem", animation:"fadeUp 0.3s ease both" }}>
+                      <div style={{ fontSize:"0.62rem", fontWeight:600, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"1rem", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        Customise your trip
+                        <span style={{ fontSize:"0.68rem", fontWeight:400, textTransform:"none", letterSpacing:0, color:"var(--warm-mid)", opacity:0.7 }}>smart defaults applied — tweak anything</span>
+                      </div>
+
+                      {/* Origin */}
+                      <div style={{ marginBottom:"0.85rem" }}>
+                        <div style={{ fontSize:"0.72rem", color:"var(--warm-mid)", marginBottom:"0.35rem" }}>Travelling from <span style={{ opacity:0.6 }}>(optional)</span></div>
+                        <FocusInput type="text" placeholder="Your departure city, e.g. London" value={origin} onChange={e=>setOrigin(e.target.value)} />
+                      </div>
+
+                      {/* Budget */}
+                      <div style={{ marginBottom:"0.85rem" }}>
+                        <div style={{ fontSize:"0.72rem", color:"var(--warm-mid)", marginBottom:"0.35rem", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          Total budget
+                          <DiceBtn onClick={()=>setBudget(BUDGETS[Math.floor(Math.random()*BUDGETS.length)])} title="Random budget" />
+                        </div>
+                        <SelectInput value={budget} onChange={e=>setBudget(e.target.value)}>
+                          <option value="">Select a budget range</option>
+                          {BUDGETS.map(b=><option key={b}>{b}</option>)}
+                        </SelectInput>
+                      </div>
+
+                      {/* Travel style */}
+                      <div style={{ marginBottom:"0.85rem" }}>
+                        <div style={{ fontSize:"0.72rem", color:"var(--warm-mid)", marginBottom:"0.35rem", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                          Travel style
+                          <DiceBtn onClick={()=>setTravelStyle(STYLES[Math.floor(Math.random()*STYLES.length)])} title="Random style" />
+                        </div>
+                        <SelectInput
+                          value={STYLES.includes(travelStyle)||travelStyle===""?travelStyle:"__custom__"}
+                          onChange={e=>{ if(e.target.value==="__custom__") setTravelStyle("__custom__"); else setTravelStyle(e.target.value); }}>
+                          <option value="">Choose your style</option>
+                          {STYLES.map(s=><option key={s}>{s}</option>)}
+                          <option value="__custom__">Describe my own style...</option>
+                        </SelectInput>
+                        {travelStyle==="__custom__" && (
+                          <FocusInput as="textarea" rows={2}
+                            placeholder="e.g. I like getting lost in local neighbourhoods..."
+                            value="" onChange={e=>setTravelStyle(e.target.value)}
+                            style={{ marginTop:"0.5rem", resize:"none", fontSize:"0.88rem", lineHeight:1.5 }} />
+                        )}
+                      </div>
+
+                      {/* Interests */}
+                      <div>
+                        <div style={{ fontSize:"0.72rem", color:"var(--warm-mid)", marginBottom:"0.5rem" }}>Interests</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:"0.4rem", marginBottom:"0.6rem" }}>
+                          {INTERESTS_OPTIONS.map(item=><Chip key={item} label={item} selected={interests.includes(item)} onClick={()=>toggleInterest(item)} />)}
+                          {interests.filter(i=>!INTERESTS_OPTIONS.includes(i)).map(i=><Chip key={i} label={i} selected={true} onClick={()=>toggleInterest(i)} />)}
+                        </div>
+                        <div style={{ display:"flex", gap:"0.5rem" }}>
+                          <FocusInput type="text" placeholder="Add your own..." value={customInterest}
+                            onChange={e=>setCustomInterest(e.target.value)}
+                            onKeyDown={e=>e.key==="Enter"&&addCustomInterest()} style={{ flex:1 }} />
+                          <button type="button" onClick={addCustomInterest} disabled={!customInterest.trim()}
+                            style={{ padding:"0 1rem", background:customInterest.trim()?"var(--rust)":"var(--sand)", border:"none", borderRadius:"8px", color:customInterest.trim()?"#fff":"var(--warm-mid)", fontSize:"0.85rem", cursor:customInterest.trim()?"pointer":"not-allowed", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
+                            + Add
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display:"flex", gap:"0.5rem" }}>
-                      <FocusInput type="text" placeholder="Add your own..." value={customInterest}
-                        onChange={e=>setCustomInterest(e.target.value)}
-                        onKeyDown={e=>e.key==="Enter"&&addCustomInterest()} style={{ flex:1 }} />
-                      <button type="button" onClick={addCustomInterest} disabled={!customInterest.trim()}
-                        style={{ padding:"0 1rem", background:customInterest.trim()?"var(--rust)":"var(--sand)", border:"none", borderRadius:"8px", color:customInterest.trim()?"#fff":"var(--warm-mid)", fontSize:"0.85rem", cursor:customInterest.trim()?"pointer":"not-allowed", fontFamily:"'DM Sans', sans-serif", whiteSpace:"nowrap" }}>
-                        + Add
-                      </button>
-                    </div>
-                  </FieldCard>
+                  )}
 
                   {error && <div style={{ background:"#fff1ed", border:"1px solid #f5c6b0", borderRadius:"8px", padding:"0.65rem 1rem", fontSize:"0.82rem", color:"var(--rust-dk)", marginBottom:"1rem" }}>{error}</div>}
 
-                  <button onClick={generate} disabled={busy}
-                    style={{ width:"100%", padding:"0.9rem 1.5rem", background:busy?"var(--warm-mid)":"var(--rust)", border:"none", borderRadius:"10px", fontSize:"1rem", fontWeight:600, cursor:busy?"not-allowed":"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", animation:busy?"none":"pulse-ring 2.5s infinite", transition:"background 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.6rem" }}>
-                    {busy ? <><Spinner size={16} />Generating...</> : "Generate my itinerary →"}
+                  <button onClick={generate} disabled={busy||!destination||!dateFrom||!dateTo}
+                    style={{ width:"100%", padding:"0.9rem 1.5rem", background:(busy||!destination||!dateFrom||!dateTo)?"var(--warm-mid)":"var(--rust)", border:"none", borderRadius:"10px", fontSize:"1rem", fontWeight:600, cursor:(busy||!destination||!dateFrom||!dateTo)?"not-allowed":"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", animation:(busy||!destination||!dateFrom||!dateTo)?"none":"pulse-ring 2.5s infinite", transition:"background 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:"0.6rem" }}>
+                    {busy ? <><Spinner size={16} />Generating...</> : !destination ? "Pick a destination first" : (!dateFrom||!dateTo) ? "Add travel dates" : "Generate my itinerary →"}
                   </button>
                 </div>
               )}
