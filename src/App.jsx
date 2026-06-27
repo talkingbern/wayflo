@@ -726,8 +726,8 @@ export default function App() {
     if (!itinerary || !UNSPLASH_KEY) return;
     setDayPhotos({});
     itinerary.days.forEach((day, i) => {
-      if (i % 2 !== 0) return;
-      const q = day.locationName || day.title.replace(/^Day \d+\s*[-—]\s*/,"") + " " + destination;
+      // Use per-day photoQuery from AI if available, fall back to locationName + destination
+      const q = day.photoQuery || day.locationName || day.title.replace(/^Day \d+\s*[-—]\s*/,"") + " " + destination;
       fetch("https://api.unsplash.com/photos/random?query="+encodeURIComponent(q)+"&orientation=landscape&client_id="+UNSPLASH_KEY)
         .then(r=>r.json())
         .then(data=>{ if(data?.urls?.regular){ setDayPhotos(prev=>({ ...prev, [i]:{ url:data.urls.regular, credit:{ name:data.user?.name, link:data.user?.links?.html } } })); } })

@@ -65,11 +65,13 @@ BACKPACKER PRINCIPLES — apply these throughout every itinerary:
 - DAILY BUDGET: End each day's content with a rough daily spend estimate: "Budget day: ~$25-35 | Mid: ~$45-55"
 - PACING: Don't over-schedule. Two or three real things per day beats six rushed ones. Build in a slow morning or free afternoon where it makes sense.
 
-GEOGRAPHIC CONTINUITY — this is critical, do not skip it:
-- Within a single day, if an activity moves the traveller from one location to another (e.g. a mountain hike, then dinner in a different part of town), explicitly state how they get there: the mode of transport, approximate cost, and approximate time.
-- Never let two bullets in the same day imply teleportation. If bullet 2 is on a mountain and bullet 3 is at a street food stall across town, bullet 2.5 (or part of bullet 3) must say how that move happens.
-- Be specific: "Grab/taxi back to town, ~20 min, ~$3-5" not "head back to town."
-- This applies within a city/region just as much as between cities — a half-day hike followed by an evening market needs the same connective step as a long-distance journey.
+GEOGRAPHIC ROUTE LOGIC — plan the trip as a PATH, not a list:
+- Before writing any day, ask: where does the traveller sleep tonight vs where they woke up? Every day must make geographic sense as a journey.
+- If the destination region has multiple towns/areas, route through them in order — visit B and C on the way from A to D. Never plan a 2-hour detour to see one thing when it can be visited en route.
+- Within a single day, any move between locations must be explicitly narrated: mode of transport, cost, time. No exceptions — no teleportation between bullets.
+- Be specific: "Catch a colectivo back to town, ~20 min, ~$1-2" not "head back to town."
+- The stops array encodes this: each stop is a real place visited that day, in order, with its own lat/lng and a transitFrom field (except the first stop) explaining how the traveller arrives there.
+- A day that starts in Town A, visits a viewpoint outside town, then ends in Town B = 3 stops, each with different coords.
 
 TRANSPORT ESTIMATES:
 - Always give price RANGES not single figures. Format: "from ~$X, typically $X-$X booked in advance"
@@ -109,21 +111,34 @@ Return a single JSON object in exactly this format — no markdown, no preamble,
     {
       "title": "Day 0 — Getting There",
       "content": "bullet\\nbullet\\nbullet",
+      "photoQuery": "Unsplash query specific to this day's main location and activity, e.g. 'Guadalajara Mexico bus terminal'",
       "lat": 0.0,
       "lng": 0.0,
       "locationName": "City, Country",
-      "transportType": "bus"
+      "transportType": "bus",
+      "stops": [
+        { "locationName": "Origin Airport", "lat": 0.0, "lng": 0.0, "transitFrom": null },
+        { "locationName": "Arrival City", "lat": 0.0, "lng": 0.0, "transitFrom": "Flight, ~3hrs" },
+        { "locationName": "Final destination for night", "lat": 0.0, "lng": 0.0, "transitFrom": "Bus from city centre, ~2.5hrs, ~$6-10" }
+      ]
     },
     {
       "title": "Day 1 — Title",
       "content": "bullet\\nbullet\\nbullet",
+      "photoQuery": "Unsplash query specific to this day's main location and activity, e.g. 'Tecolotlan Jalisco Mexico market'",
       "lat": 0.0,
       "lng": 0.0,
       "locationName": "Neighbourhood, City",
-      "transportType": null
+      "transportType": null,
+      "stops": [
+        { "locationName": "Morning location", "lat": 0.0, "lng": 0.0, "transitFrom": null },
+        { "locationName": "Afternoon location", "lat": 0.0, "lng": 0.0, "transitFrom": "Walk, ~10 min" }
+      ]
     }
   ]
 }
+
+CRITICAL: The stops array must reflect the actual geographic movement of the day. Every place mentioned in content that has a distinct lat/lng must appear as a stop. transitFrom on every stop (except the first) must explain how the traveller gets there. Never put the same coords on two different stops.
 
 Include Day 0 (Getting There), one entry per full day (Day 1 through Day ${tripDays}), and a final Getting Home entry. Real place names only. Each day ends with a daily budget estimate line.`;
   const refinePrompt = `Update this itinerary based on feedback: ${refineFeedback}
@@ -141,7 +156,7 @@ Return only the updated JSON in the same format. No markdown fences.`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 4096,
+        max_tokens: 6000,
         system: systemPrompt,
         messages: [{ role: "user", content: isRefinement ? refinePrompt : freshPrompt }],
       }),
