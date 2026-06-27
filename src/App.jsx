@@ -6,6 +6,7 @@ import TripMap from "./TripMap";
 import LandingPage from "./LandingPage";
 import ErrorBoundary from "./ErrorBoundary";
 import { buildBookingLinks } from "./bookingLinks";
+import mapboxgl from "mapbox-gl";
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
@@ -63,38 +64,35 @@ function DestinationMapInput({ value, onChange }) {
   const [searching, setSearching]   = useState(false);
   const searchTimeout                = useRef(null);
 
-  // Init map once
   useEffect(() => {
     if (!MAPBOX_TOKEN || mapRef.current) return;
-    import("mapbox-gl").then(({ default: mapboxgl }) => {
-      mapboxgl.accessToken = MAPBOX_TOKEN;
-      const map = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/light-v11",
-        center: [20, 20],
-        zoom: 1.4,
-        projection: "mercator",
-        attributionControl: false,
-      });
-      map.addControl(new mapboxgl.AttributionControl({ compact: true }));
-      map.on("click", async (e) => {
-        const { lng, lat } = e.lngLat;
-        placeMarker(map, mapboxgl, lng, lat);
-        try {
-          const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,region,country&access_token=${MAPBOX_TOKEN}`);
-          const d = await r.json();
-          const name = d.features?.[0]?.place_name || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
-          setSearch(name);
-          setResults([]);
-          onChange(name, { lat, lng });
-        } catch(e) {}
-      });
-      mapRef.current = map;
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+    const map = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/light-v11",
+      center: [20, 20],
+      zoom: 1.4,
+      projection: "mercator",
+      attributionControl: false,
     });
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }));
+    map.on("click", async (e) => {
+      const { lng, lat } = e.lngLat;
+      placeMarker(map, lng, lat);
+      try {
+        const r = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,region,country&access_token=${MAPBOX_TOKEN}`);
+        const d = await r.json();
+        const name = d.features?.[0]?.place_name || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
+        setSearch(name);
+        setResults([]);
+        onChange(name, { lat, lng });
+      } catch(e) {}
+    });
+    mapRef.current = map;
     return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
   }, []);
 
-  function placeMarker(map, mapboxgl, lng, lat) {
+  function placeMarker(map, lng, lat) {
     if (markerRef.current) markerRef.current.remove();
     const el = document.createElement("div");
     el.style.cssText = "width:14px;height:14px;background:var(--rust);border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(196,98,45,0.5)";
@@ -123,10 +121,7 @@ function DestinationMapInput({ value, onChange }) {
     const [lng, lat] = feature.center;
     setSearch(name); setResults([]);
     onChange(name, { lat, lng });
-    if (mapRef.current) {
-      const { default: mapboxgl } = await import("mapbox-gl");
-      placeMarker(mapRef.current, mapboxgl, lng, lat);
-    }
+    if (mapRef.current) placeMarker(mapRef.current, lng, lat);
   }
 
   return (
