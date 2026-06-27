@@ -6,7 +6,7 @@ import TripMap from "./TripMap";
 import LandingPage from "./LandingPage";
 import ErrorBoundary from "./ErrorBoundary";
 import { buildBookingLinks } from "./bookingLinks";
-import mapboxgl from "mapbox-gl";
+// mapbox-gl loaded via CDN in index.html — available as window.mapboxgl
 
 const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
 
@@ -65,9 +65,10 @@ function DestinationMapInput({ value, onChange }) {
   const searchTimeout                = useRef(null);
 
   useEffect(() => {
-    if (!MAPBOX_TOKEN || mapRef.current) return;
-    mapboxgl.accessToken = MAPBOX_TOKEN;
-    const map = new mapboxgl.Map({
+    if (!MAPBOX_TOKEN || mapRef.current || !window.mapboxgl) return;
+    const mbgl = window.mapboxgl;
+    mbgl.accessToken = MAPBOX_TOKEN;
+    const map = new mbgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/light-v11",
       center: [20, 20],
@@ -75,7 +76,7 @@ function DestinationMapInput({ value, onChange }) {
       projection: "mercator",
       attributionControl: false,
     });
-    map.addControl(new mapboxgl.AttributionControl({ compact: true }));
+    map.addControl(new mbgl.AttributionControl({ compact: true }));
     map.on("click", async (e) => {
       const { lng, lat } = e.lngLat;
       placeMarker(map, lng, lat);
@@ -96,7 +97,7 @@ function DestinationMapInput({ value, onChange }) {
     if (markerRef.current) markerRef.current.remove();
     const el = document.createElement("div");
     el.style.cssText = "width:14px;height:14px;background:var(--rust);border-radius:50%;border:2px solid #fff;box-shadow:0 2px 6px rgba(196,98,45,0.5)";
-    markerRef.current = new mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    markerRef.current = new window.mapboxgl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
     map.flyTo({ center: [lng, lat], zoom: 5, duration: 1000 });
   }
 
