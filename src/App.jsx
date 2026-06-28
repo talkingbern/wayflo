@@ -957,7 +957,7 @@ export default function App() {
       {showLanding && (
         <div style={{ position:"relative" }}>
           {landingHeader}
-          <LandingPage onGetStarted={()=>setShowLanding(false)} />
+          <LandingPage onGetStarted={()=>setShowLanding(false)} user={user} />
           <footer style={{ textAlign:"center", padding:"1.5rem 1rem", color:"var(--warm-mid)", fontSize:"0.68rem", letterSpacing:"0.06em", borderTop:"1px solid var(--sand)" }}>
             {footerLabel}
           </footer>

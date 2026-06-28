@@ -1,5 +1,62 @@
 // src/LandingPage.jsx
-export default function LandingPage({ onGetStarted }) {
+import { useState, useEffect } from "react";
+
+const STAR = "★";
+const STAR_EMPTY = "☆";
+
+function StarPicker({ value, onChange }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div style={{ display: "flex", gap: "0.25rem", fontSize: "1.5rem", cursor: "pointer" }}>
+      {[1,2,3,4,5].map(n => (
+        <span key={n}
+          style={{ color: (hovered || value) >= n ? "var(--rust)" : "var(--sand)", transition: "color 0.1s" }}
+          onMouseEnter={() => setHovered(n)}
+          onMouseLeave={() => setHovered(0)}
+          onClick={() => onChange(n)}>
+          {STAR}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export default function LandingPage({ onGetStarted, user }) {
+  const [reviews, setReviews]           = useState([]);
+  const [reviewBody, setReviewBody]     = useState("");
+  const [reviewDest, setReviewDest]     = useState("");
+  const [reviewName, setReviewName]     = useState("");
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewStatus, setReviewStatus] = useState(""); // "sending" | "done" | "error:<msg>"
+
+  useEffect(() => {
+    fetch("/api/reviews")
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setReviews(data); })
+      .catch(() => {});
+  }, []);
+
+  async function submitReview() {
+    if (!user) { onGetStarted(); return; }
+    if (!reviewBody.trim() || reviewRating === 0) {
+      setReviewStatus("error:Please add a rating and write something."); return;
+    }
+    setReviewStatus("sending");
+    try {
+      const r = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, destination: reviewDest, body: reviewBody, rating: reviewRating, display_name: reviewName }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setReviewStatus("error:" + (d.error || "Something went wrong.")); return; }
+      setReviewStatus("done");
+      setReviewBody(""); setReviewDest(""); setReviewName(""); setReviewRating(0);
+    } catch (e) {
+      setReviewStatus("error:Could not send. Try again.");
+    }
+  }
+
   return (
     <div style={{ fontFamily:"'DM Sans', sans-serif", color:"var(--ink)", overflowX:"hidden" }}>
 
@@ -129,11 +186,88 @@ export default function LandingPage({ onGetStarted }) {
               "✓  Day-by-day itineraries for 100+ destinations",
               "✓  Real hostel and transport recommendations",
               "✓  Budget breakdowns that don't lie",
-              "✓  First trip completely free, $2 after that",
+              "✓  Free during early access",
               "✓  No subscription, no commitment",
             ].map(line => (
               <div key={line} style={{ fontSize:"0.85rem", color:"rgba(255,255,255,0.75)", display:"flex", gap:"0.5rem" }}>{line}</div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── REVIEWS ──────────────────────────────────────────────────────── */}
+      <section style={{ padding:"4rem 1.5rem", background:"var(--paper)", borderTop:"1px solid var(--sand)" }}>
+        <div style={{ maxWidth:720, margin:"0 auto" }}>
+          <div style={{ fontSize:"0.65rem", letterSpacing:"0.14em", textTransform:"uppercase", color:"var(--warm-mid)", marginBottom:"0.5rem", textAlign:"center" }}>From travellers</div>
+          <h2 style={{ fontFamily:"'Playfair Display', serif", fontSize:"clamp(1.8rem,5vw,2.4rem)", fontWeight:900, textAlign:"center", marginBottom:"2.5rem", color:"var(--ink)" }}>
+            What backpackers are saying.
+          </h2>
+
+          {/* Review cards */}
+          {reviews.length > 0 && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px, 1fr))", gap:"1rem", marginBottom:"3rem" }}>
+              {reviews.map(r => (
+                <div key={r.id} style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"10px", padding:"1.25rem 1.4rem" }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"0.6rem" }}>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:"0.88rem", color:"var(--ink)" }}>{r.display_name}</div>
+                      {r.destination && <div style={{ fontSize:"0.75rem", color:"var(--warm-mid)", marginTop:"0.1rem" }}>📍 {r.destination}</div>}
+                    </div>
+                    <div style={{ color:"var(--rust)", fontSize:"0.95rem", letterSpacing:"0.05em", flexShrink:0 }}>
+                      {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
+                    </div>
+                  </div>
+                  <p style={{ fontSize:"0.84rem", color:"var(--ink-soft)", lineHeight:1.6, margin:0 }}>{r.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Submit form */}
+          <div style={{ background:"var(--white)", border:"1px solid var(--sand)", borderRadius:"12px", padding:"1.75rem" }}>
+            <div style={{ fontWeight:600, fontSize:"0.92rem", marginBottom:"1.25rem", color:"var(--ink)" }}>
+              {user ? "Leave a review" : "Used Wayflo? Share your experience →"}
+            </div>
+
+            {reviewStatus === "done" ? (
+              <div style={{ fontSize:"0.88rem", color:"var(--green)", padding:"0.75rem 0" }}>
+                ✓ Thanks! Your review will appear once approved.
+              </div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem" }}>
+                <StarPicker value={reviewRating} onChange={setReviewRating} />
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.75rem" }}>
+                  <input
+                    placeholder="Your name (optional)"
+                    value={reviewName}
+                    onChange={e => setReviewName(e.target.value)}
+                    style={{ padding:"0.6rem 0.85rem", border:"1px solid var(--sand)", borderRadius:"7px", fontSize:"0.84rem", fontFamily:"'DM Sans', sans-serif", background:"var(--paper)", color:"var(--ink)", outline:"none" }}
+                  />
+                  <input
+                    placeholder="Destination (optional)"
+                    value={reviewDest}
+                    onChange={e => setReviewDest(e.target.value)}
+                    style={{ padding:"0.6rem 0.85rem", border:"1px solid var(--sand)", borderRadius:"7px", fontSize:"0.84rem", fontFamily:"'DM Sans', sans-serif", background:"var(--paper)", color:"var(--ink)", outline:"none" }}
+                  />
+                </div>
+                <textarea
+                  placeholder="What did you think? Was the itinerary useful? Anything we got wrong?"
+                  value={reviewBody}
+                  onChange={e => setReviewBody(e.target.value)}
+                  rows={3}
+                  style={{ padding:"0.7rem 0.85rem", border:"1px solid var(--sand)", borderRadius:"7px", fontSize:"0.84rem", fontFamily:"'DM Sans', sans-serif", background:"var(--paper)", color:"var(--ink)", resize:"vertical", outline:"none" }}
+                />
+                {reviewStatus.startsWith("error:") && (
+                  <div style={{ fontSize:"0.8rem", color:"var(--rust)" }}>{reviewStatus.slice(6)}</div>
+                )}
+                <button
+                  onClick={submitReview}
+                  disabled={reviewStatus === "sending"}
+                  style={{ alignSelf:"flex-start", padding:"0.65rem 1.5rem", background:"var(--rust)", border:"none", borderRadius:"7px", fontSize:"0.88rem", fontWeight:600, color:"#fff", cursor:"pointer", fontFamily:"'DM Sans', sans-serif", opacity: reviewStatus === "sending" ? 0.6 : 1 }}>
+                  {reviewStatus === "sending" ? "Sending…" : user ? "Submit review" : "Sign in to review →"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -146,21 +280,19 @@ export default function LandingPage({ onGetStarted }) {
             Simple and honest.
           </h2>
           <p style={{ fontSize:"0.88rem", color:"var(--warm-mid)", marginBottom:"2rem", lineHeight:1.6 }}>
-            No subscriptions. No hidden fees. Pay only when you want a new itinerary.
+            Free during early access. No card required, no commitment.
           </p>
           <div style={{ background:"var(--paper)", border:"2px solid var(--rust)", borderRadius:"16px", padding:"2rem", marginBottom:"1rem" }}>
             <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"3rem", fontWeight:900, color:"var(--rust)", lineHeight:1 }}>Free</div>
-            <div style={{ fontSize:"0.85rem", color:"var(--warm-mid)", marginBottom:"1.25rem" }}>for your first itinerary</div>
+            <div style={{ fontSize:"0.85rem", color:"var(--warm-mid)", marginBottom:"1.25rem" }}>during early access</div>
             <div style={{ height:1, background:"var(--sand)", marginBottom:"1.25rem" }} />
-            <div style={{ fontFamily:"'Playfair Display', serif", fontSize:"2rem", fontWeight:900, color:"var(--ink)", lineHeight:1 }}>$2</div>
-            <div style={{ fontSize:"0.85rem", color:"var(--warm-mid)", marginBottom:"1.5rem" }}>per itinerary after that</div>
             <button onClick={onGetStarted}
               style={{ width:"100%", padding:"0.85rem", background:"var(--rust)", border:"none", borderRadius:"8px", fontSize:"0.95rem", fontWeight:600, cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif" }}>
               Get started free →
             </button>
           </div>
           <div style={{ fontSize:"0.75rem", color:"var(--warm-mid)", lineHeight:1.6 }}>
-            Secure payments via Stripe. No card required for your free trip.
+            No card required. Early access is completely free.
           </div>
         </div>
       </section>
@@ -172,7 +304,7 @@ export default function LandingPage({ onGetStarted }) {
             Where are you<br /><span style={{ color:"var(--rust)" }}>running off to?</span>
           </h2>
           <p style={{ fontSize:"0.9rem", color:"var(--warm-mid)", marginBottom:"2rem", lineHeight:1.6 }}>
-            Your next adventure is five questions away.
+            Your next adventure is a few questions away.
           </p>
           <button onClick={onGetStarted}
             style={{ padding:"1rem 2.5rem", background:"var(--rust)", border:"none", borderRadius:"10px", fontSize:"1.05rem", fontWeight:600, cursor:"pointer", color:"#fff", fontFamily:"'DM Sans', sans-serif", boxShadow:"0 4px 20px rgba(196,98,45,0.3)", transition:"background 0.2s, transform 0.15s" }}
