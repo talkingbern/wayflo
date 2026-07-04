@@ -156,7 +156,7 @@ Return only the updated JSON in the same format. No markdown fences.`;
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 6000,
+        max_tokens: 4000,
         system: systemPrompt,
         messages: [{ role: "user", content: isRefinement ? refinePrompt : freshPrompt }],
       }),
@@ -177,6 +177,8 @@ Return only the updated JSON in the same format. No markdown fences.`;
   }
   const data    = await anthropicRes.json();
   const rawText = (data.content ?? []).map(b => b.text ?? "").join("");
+  // Strip any markdown fences Claude occasionally wraps around JSON
+  const cleaned = rawText.replace(/^```[\w]*\s*/gm, "").replace(/```\s*$/gm, "").trim();
   // ── Update counters for logged-in users ──────────────────────────────────
   if (userId && supabaseUrl && supabaseKey) {
     // Increment trips_generated via RPC
@@ -203,5 +205,5 @@ Return only the updated JSON in the same format. No markdown fences.`;
       }).catch(() => {});
     }
   }
-  return res.status(200).json({ raw: rawText });
+  return res.status(200).json({ raw: cleaned });
 }

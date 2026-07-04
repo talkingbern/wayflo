@@ -546,12 +546,13 @@ function InspireModal({ onClose, onFill }) {
       });
       if (!res.ok) throw new Error("Server error");
       const data   = await res.json();
-      const parsed = JSON.parse(data.raw.replace(/```json|```/g,"").trim());
-      onFill({ ...parsed, origin: origin || "" });
-      onClose();
-    } catch(e) { setError("Couldn't generate suggestions. Try again."); }
-    setLoading(false);
-  }
+      try {
+        const parse = JSON.parse(data.raw);
+        setItinerary(parse);
+      } catch (e) {
+        setError("Something went wrong generating your itinerary. Please try again.");
+        console.error("JSON parse failed:", data.raw?.slice(0, 200));
+      }
 
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(26,21,16,0.6)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:"1rem" }}
